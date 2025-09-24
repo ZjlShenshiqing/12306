@@ -62,19 +62,19 @@
             <dependency>
                 <groupId>org.mybatis.spring.boot</groupId>
                 <artifactId>mybatis-spring-boot-starter</artifactId>
-                <version>${mybatis-spring-boot-starter.version}$</version>
+                <version>${mybatis-spring-boot-starter.version}</version>
             </dependency>
 
             <dependency>
                 <groupId>com.baomidou</groupId>
                 <artifactId>mybatis-plus-boot-starter</artifactId>
-                <version>${mybatis-plus.version}$</version>
+                <version>${mybatis-plus.version}</version>
             </dependency>
 
             <dependency>
                 <groupId>org.apache.shardingsphere</groupId>
                 <artifactId>shardingsphere-jdbc-core</artifactId>
-                <version>${shardingsphere.version}$</version>
+                <version>${shardingsphere.version}</version>
             </dependency>
 
             <dependency>
@@ -92,13 +92,13 @@
             <dependency>
                 <groupId>com.github.dozermapper</groupId>
                 <artifactId>dozer-core</artifactId>
-                <version>${dozer-core.version}$</version>
+                <version>${dozer-core.version}</version>
             </dependency>
 
             <dependency>
                 <groupId>cn.hutool</groupId>
                 <artifactId>hutool-all</artifactId>
-                <version>${hutool-all.version}$</version>
+                <version>${hutool-all.version}</version>
             </dependency>
 
             <dependency>

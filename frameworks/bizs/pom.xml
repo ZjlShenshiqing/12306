@@ -5,9 +5,8 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.zjl</groupId>
-        <artifactId>12306ByZhangjilin</artifactId>
+        <artifactId>index12306-frameworks</artifactId>
         <version>1.0-SNAPSHOT</version>
-        <relativePath>../../pom.xml</relativePath>
     </parent>
 
     <artifactId>index-12306-bizs-spring-boot-starter</artifactId>

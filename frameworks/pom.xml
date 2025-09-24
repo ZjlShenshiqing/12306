@@ -10,6 +10,14 @@
     </parent>
 
     <artifactId>index12306-frameworks</artifactId>
+    <packaging>pom</packaging>
+    <modules>
+        <module>base</module>
+        <module>common</module>
+        <module>bizs</module>
+        <module>database</module>
+        <module>distributedid</module>
+    </modules>
 
     <properties>
         <maven.compiler.source>8</maven.compiler.source>
