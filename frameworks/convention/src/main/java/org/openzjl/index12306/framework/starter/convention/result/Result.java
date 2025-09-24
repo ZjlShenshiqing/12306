@@ -1,9 +1,9 @@
 package org.openzjl.index12306.framework.starter.convention.result;
 
-import com.sun.xml.internal.ws.developer.Serialization;
 import lombok.Data;
 import lombok.experimental.Accessors;
 
+import java.io.Serial;
 import java.io.Serializable;
 
 /**
