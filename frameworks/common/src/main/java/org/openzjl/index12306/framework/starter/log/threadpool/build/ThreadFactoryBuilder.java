@@ -1,10 +1,9 @@
-package org.openzjl.index12306.framework.starter.common.threadpool.build;
+package org.openzjl.index12306.framework.starter.log.threadpool.build;
 
 import org.openzjl.index12306.framework.starter.designpattern.builder.Builder;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**

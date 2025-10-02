@@ -1,4 +1,4 @@
-package org.openzjl.index12306.framework.starter.common.threadpool.support.eager;
+package org.openzjl.index12306.framework.starter.log.threadpool.support.eager;
 
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;

@@ -1,4 +1,4 @@
-package org.openzjl.index12306.framework.starter.common.enums;
+package org.openzjl.index12306.framework.starter.log.enums;
 
 /**
  * 操作类型枚举

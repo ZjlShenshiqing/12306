@@ -1,4 +1,4 @@
-package org.openzjl.index12306.framework.starter.common.toolkit;
+package org.openzjl.index12306.framework.starter.log.toolkit;
 
 import lombok.SneakyThrows;
 

@@ -1,9 +1,8 @@
-package org.openzjl.index12306.framework.starter.common.threadpool.proxy;
+package org.openzjl.index12306.framework.starter.log.threadpool.proxy;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
-import org.openzjl.index12306.framework.starter.common.threadpool.build.ThreadPoolBuilder;
-import org.openzjl.index12306.framework.starter.common.toolkit.ThreadUtil;
+import org.openzjl.index12306.framework.starter.log.toolkit.ThreadUtil;
 
 import java.lang.reflect.Proxy;
 import java.util.concurrent.LinkedBlockingQueue;

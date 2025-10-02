@@ -1,8 +1,8 @@
-package org.openzjl.index12306.framework.starter.common.threadpool.proxy;
+package org.openzjl.index12306.framework.starter.log.threadpool.proxy;
 
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.openzjl.index12306.framework.starter.common.threadpool.build.ThreadPoolBuilder;
+import org.openzjl.index12306.framework.starter.log.threadpool.build.ThreadPoolBuilder;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;

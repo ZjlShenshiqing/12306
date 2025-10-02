@@ -1,13 +1,8 @@
-package org.openzjl.index12306.framework.starter.common.toolkit;
+package org.openzjl.index12306.framework.starter.log.toolkit;
 
 import com.github.dozermapper.core.DozerBeanMapperBuilder;
 import com.github.dozermapper.core.Mapper;
-import com.github.dozermapper.core.builder.BeanMappingsBuilder;
-import com.github.dozermapper.core.classmap.MappingFileData;
-import com.github.dozermapper.core.config.BeanContainer;
-import com.github.dozermapper.core.factory.DestBeanCreator;
 import com.github.dozermapper.core.loader.api.BeanMappingBuilder;
-import com.github.dozermapper.core.propertydescriptor.PropertyDescriptorFactory;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 

@@ -1,6 +1,6 @@
-package org.openzjl.index12306.framework.starter.common.threadpool.build;
+package org.openzjl.index12306.framework.starter.log.threadpool.build;
 
-import org.openzjl.index12306.framework.starter.common.toolkit.Assert;
+import org.openzjl.index12306.framework.starter.log.toolkit.Assert;
 import org.openzjl.index12306.framework.starter.designpattern.builder.Builder;
 
 import java.math.BigDecimal;
