@@ -17,6 +17,9 @@
         <module>bizs</module>
         <module>database</module>
         <module>distributedid</module>
+        <module>designpattern</module>
+        <module>convention</module>
+        <module>log</module>
     </modules>
 
     <properties>
