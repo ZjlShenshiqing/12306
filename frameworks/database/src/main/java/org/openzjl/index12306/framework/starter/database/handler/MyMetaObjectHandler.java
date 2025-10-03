@@ -2,7 +2,7 @@ package org.openzjl.index12306.framework.starter.database.handler;
 
 import com.baomidou.mybatisplus.core.handlers.MetaObjectHandler;
 import org.apache.ibatis.reflection.MetaObject;
-import org.openzjl.index12306.framework.starter.common.enums.DelEnum;
+import org.openzjl.index12306.framework.starter.log.enums.DelEnum;
 
 import java.util.Date;
 
@@ -17,7 +17,7 @@ import java.util.Date;
  * <ul>
  *     <li>新增场景：自动填充 {@code createTime}、{@code updateTime}、{@code delFlag}。</li>
  *     <li>更新场景：自动填充 {@code updateTime}。</li>
- *     <li>删除标识 {@code delFlag}：使用 {@link org.openzjl.index12306.framework.starter.common.enums.DelEnum}，约定 NORMAL=未删除。</li>
+ *     <li>删除标识 {@code delFlag}：使用 {@link org.openzjl.index12306.framework.starter.log.enums.DelEnum}，约定 NORMAL=未删除。</li>
  * </ul>
  *
  * <p>要求：</p>

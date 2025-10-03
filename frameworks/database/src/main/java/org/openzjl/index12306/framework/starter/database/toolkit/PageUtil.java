@@ -2,10 +2,9 @@ package org.openzjl.index12306.framework.starter.database.toolkit;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import org.openzjl.index12306.framework.starter.common.toolkit.BeanUtil;
+import org.openzjl.index12306.framework.starter.log.toolkit.BeanUtil;
 import org.openzjl.index12306.framework.starter.convention.page.PageRequest;
 import org.openzjl.index12306.framework.starter.convention.page.PageResponse;
-import org.springframework.context.annotation.Bean;
 
 import java.util.List;
 import java.util.function.Function;
