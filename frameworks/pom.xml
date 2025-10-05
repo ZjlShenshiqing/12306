@@ -20,6 +20,8 @@
         <module>designpattern</module>
         <module>convention</module>
         <module>log</module>
+        <module>idempotent</module>
+        <module>web</module>
     </modules>
 
     <properties>
