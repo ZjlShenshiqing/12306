@@ -28,7 +28,7 @@ public interface DistributedCache extends Cache {
     <T> T get(@NotBlank String key, Class<T> clazz, CacheLoader<T> cacheLoader, long timeout, TimeUnit unit);
 
     /**
-     * 以一种安全的方式获取缓存，若查询结果为空，调用CacheLoader加载缓存
+     * 以一种w安全的方式获取缓存，若查询结果为空，调用CacheLoader加载缓存
      * 通过此方式以防止程序出现：缓存击穿、缓存雪崩等问题，适用于不被外部直接调用的接口
      */
     <T> T safeGet(@NotBlank String key, Class<T> clazz, CacheLoader<T> cacheLoader, long timeout);
