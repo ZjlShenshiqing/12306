@@ -1,0 +1,59 @@
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: index12306-user-service
+
+          # - 使用 lb:// 前缀表示通过服务发现（如 Nacos、Eureka）进行负载均衡调用
+          # 路径拼接逻辑：Spring Cloud Gateway 默认会将 Path predicate 中匹配的路径（如 /api/user-service/xxx）完整地附加到 uri 指定的基础路径之后。但
+          uri: lb://index12306-user${unique-name:}-service/api/user-service/**
+
+          # 路由匹配条件：只有请求路径匹配以下规则时，才应用此路由
+          predicates:
+            # 当请求路径以 /api/user-service/ 开头时，匹配该路由
+            - Path=/api/user-service/**
+
+          # 过滤器配置：在请求转发前后执行自定义逻辑
+          filters:
+            - name: TokenValidate
+              args:
+                # blackPathPre: 这个参数名直译是“黑名单路径前缀”，但在这种场景下，
+                # 它其实是“不需要Token验证的路径列表”，也就是我们常说的“白名单”。
+                # 放在这里的路径，即使用户没有登录，也可以访问。
+                # blackPathPre 表示“免 Token 验证”的路径前缀列表（即白名单）
+                # 以下路径开头的请求将跳过 Token 验证
+                blackPathPre:
+                  - /api/user-service/passenger
+                  - /api/user-service/query
+                  - /api/user-service/logout
+                  - /api/user-service/deletion
+
+
+        - id: index12306-ticket-service
+          uri: lb://index12306-ticket${unique-name:}-service/api/ticket-service/**
+          predicates:
+            - Path=/api/ticket-service/**
+          filters:
+            - name: TokenValidate
+              args:
+                blackPathPre:
+                  - /api/ticket-service/ticket/purchase
+                  - /api/ticket-service/ticket/pay/query
+                  - /api/ticket-service/ticket/cancel
+
+        - id: index12306-pay-service
+          uri: lb://index12306-pay${unique-name:}-service/api/pay-service/**
+          predicates:
+            - Path=/api/pay-service/**
+
+        - id: index12306-order-service
+          uri: lb://index12306-order${unique-name:}-service/api/order-service/**
+          predicates:
+            - Path=/api/order-service/**
+          filters:
+            - name: TokenValidate
+              args:
+                blackPathPre:
+                  - /api/order-service/order/ticket/query
+                  - /api/order-service/order/ticket/page
+                  - /api/order-service/order/ticket/self/page
