@@ -11,6 +11,7 @@
 
     <artifactId>index12306-services</artifactId>
     <packaging>pom</packaging>
+
     <modules>
         <module>gateway-service</module>
         <module>order-service</module>
@@ -19,10 +20,18 @@
         <module>user-service</module>
     </modules>
 
-    <properties>
-        <maven.compiler.source>8</maven.compiler.source>
-        <maven.compiler.target>8</maven.compiler.target>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    </properties>
+    <dependencies>
+        <!-- 随时查看其内部健康状况的依赖 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- spring-boot-starter-actuator 给你提供了监控的“窗口”（端点），而这个 micrometer-registry-prometheus 依赖则是让Prometheus这个“医生”能从这个窗口里读懂你的各项“体检指标” -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+    </dependencies>
 
 </project>

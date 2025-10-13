@@ -32,7 +32,7 @@
         <!-- 专注于提升和监控 Java 应用中的线程池性能和稳定性 -->
         <hippo4j-threadpool-config-mode.version>1.5.0</hippo4j-threadpool-config-mode.version>
         <!-- 微服务监控 -->
-        <micro-registry-prometheus.version>1.10.6</micro-registry-prometheus.version>
+        <micrometer-registry-prometheus.version>1.10.6</micrometer-registry-prometheus.version>
     </properties>
 
     <dependencyManagement>
@@ -57,6 +57,8 @@
                 <groupId>com.alibaba.cloud</groupId>
                 <artifactId>spring-cloud-alibaba-dependencies</artifactId>
                 <version>${spring-cloud-alibaba.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
 
             <dependency>
@@ -144,9 +146,9 @@
             </dependency>
 
             <dependency>
-                <groupId>io.mecrometer</groupId>
+                <groupId>io.micrometer</groupId>
                 <artifactId>micrometer-registry-prometheus</artifactId>
-                <version>${micro-registry-prometheus.version}</version>
+                <version>${micrometer-registry-prometheus.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
