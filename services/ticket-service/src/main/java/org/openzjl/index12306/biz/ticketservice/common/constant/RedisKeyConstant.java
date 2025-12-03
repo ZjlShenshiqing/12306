@@ -22,4 +22,14 @@ public class RedisKeyConstant {
      * 列车站点缓存
      */
     public static final String STATION_ALL = "index12306-ticket-service:station_all:";
+
+    /**
+     * 列车车厢查询，Key Prefix + 列车ID
+     */
+    public static final String TRAIN_CARRIAGE = "index12306-ticket-service:train_carriage:";
+
+    /**
+     * 获取列车车厢数量集合分布式锁 Key
+     */
+    public static final String LOCK_QUERY_CARRIAGE_NUMBER_LIST = "index12306-ticket-service:lock:query_carriage_number_list_%s";
 }
