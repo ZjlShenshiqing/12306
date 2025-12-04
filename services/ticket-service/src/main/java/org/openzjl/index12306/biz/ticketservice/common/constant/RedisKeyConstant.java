@@ -32,4 +32,14 @@ public class RedisKeyConstant {
      * 获取列车车厢数量集合分布式锁 Key
      */
     public static final String LOCK_QUERY_CARRIAGE_NUMBER_LIST = "index12306-ticket-service:lock:query_carriage_number_list_%s";
+
+    /**
+     * 站点余票查询，Key Prefix + 列车ID_起始站点_终点
+     */
+    public static final String TRAIN_STATION_REMAINING_TICKET = "index12306-ticket-service:train_station_remaining_ticket:";
+
+    /**
+     * 列车购买令牌桶 - 相当于余票
+     */
+    public static final String TICKET_AVAILABILITY_TOKEN_BUCKET = "index12306-ticket-service:ticket_availability_token_bucket:";
 }
