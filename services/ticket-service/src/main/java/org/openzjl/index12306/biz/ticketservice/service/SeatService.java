@@ -2,6 +2,8 @@ package org.openzjl.index12306.biz.ticketservice.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import org.openzjl.index12306.biz.ticketservice.dao.entity.SeatDO;
+import org.openzjl.index12306.biz.ticketservice.dto.domain.SeatTypeCountDTO;
+import org.openzjl.index12306.biz.ticketservice.service.handler.ticket.dto.TrainPurchaseTicketRespDTO;
 
 import java.util.List;
 
@@ -44,6 +46,34 @@ public interface SeatService extends IService<SeatDO> {
      */
     List<String> listUsableCarriageNumber(String trainId, Integer carriageType, String departure, String arrival);
 
+    /**
+     * 获取列车从startStation 到 endStation 区间可用座位数量
+     *
+     * @param trainId       列车ID
+     * @param startStation  出发站
+     * @param endStation    到达站
+     * @param seatTypes     座位类型集合
+     * @return              座位剩余可用数量
+     */
+    List<SeatTypeCountDTO> listAvailableSeatTypeCount(Long trainId, String startStation, String endStation, List<Integer> seatTypes);
 
-    // TODO
+    /**
+     * 锁定选中以及沿途车票状态
+     *
+     * @param trainId                        列车ID
+     * @param departure                      出发站
+     * @param arrival                        到达站
+     * @param trainPurchaseTicketRespDTOList 乘车人以及座位信息
+     */
+    void lockSeat(String trainId, String departure, String arrival, List<TrainPurchaseTicketRespDTO> trainPurchaseTicketRespDTOList);
+
+    /**
+     * 解锁选中以及沿途车票状态
+     *
+     * @param trainId                        列车ID
+     * @param departure                      出发站
+     * @param arrival                        到达站
+     * @param trainPurchaseTicketResults     乘车人以及座位信息
+     */
+    void unLock(String trainId, String departure, String arrival, List<TrainPurchaseTicketRespDTO> trainPurchaseTicketResults);
 }
