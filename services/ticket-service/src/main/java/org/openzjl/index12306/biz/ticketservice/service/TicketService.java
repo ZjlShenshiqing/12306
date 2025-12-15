@@ -1,18 +1,15 @@
 package org.openzjl.index12306.biz.ticketservice.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.openzjl.index12306.biz.ticketservice.dao.entity.TicketDO;
 import org.openzjl.index12306.biz.ticketservice.dto.req.CancelTicketOrderReqDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.req.PurchaseTicketReqDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.req.RefundTicketReqDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.req.TicketPageQueryReqDTO;
-import org.openzjl.index12306.biz.ticketservice.dto.resp.PayInfoRespDTO;
+import org.openzjl.index12306.biz.ticketservice.remote.dto.PayInfoRespDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.resp.RefundTicketRespDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.resp.TicketPageQueryRespDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.resp.TicketPurchaseRespDTO;
-import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.RequestBody;
 
 /**

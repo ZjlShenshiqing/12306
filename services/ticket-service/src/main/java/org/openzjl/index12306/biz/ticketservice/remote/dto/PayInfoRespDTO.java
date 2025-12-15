@@ -1,4 +1,4 @@
-package org.openzjl.index12306.biz.ticketservice.dto.resp;
+package org.openzjl.index12306.biz.ticketservice.remote.dto;
 
 import lombok.Data;
 
