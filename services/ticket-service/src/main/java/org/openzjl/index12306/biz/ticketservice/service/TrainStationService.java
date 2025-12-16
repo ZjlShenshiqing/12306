@@ -45,9 +45,9 @@ public interface TrainStationService {
      * 深圳北 -> 广州南
      *
      * @param trainId   列车ID
-     * @param departure
-     * @param arrival
-     * @return
+     * @param departure 出发站
+     * @param arrival   到达站
+     * @return          列车站点路线关系信息
      */
     List<RouteDTO> listTakeoutTrainStationRoute(String trainId, String departure, String arrival);
 }

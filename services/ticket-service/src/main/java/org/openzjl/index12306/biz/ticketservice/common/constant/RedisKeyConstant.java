@@ -47,4 +47,15 @@ public class RedisKeyConstant {
      * 车厢余票查询，Key Prefix + 列车ID_起始站点_终点
      */
     public static final String TRAIN_STATION_CARRIAGE_REMAINING_TICKET = "index12306-ticket-service:train_station_carriage_remaining_ticket:";
+
+    /**
+     * 列车基本信息
+     * Key Prefix + 列车ID
+     */
+    public static final String TRAIN_INFO = "index12306-ticket-service:train_info:";
+
+    /**
+     * 列车购买令牌桶加载数据key
+     */
+    public static final String LOCK_TICKET_AVAILABILITY_TOKEN_BUCKET = "index12306-ticket-service:lock_ticket_availability_token_bucket:%s";
 }
