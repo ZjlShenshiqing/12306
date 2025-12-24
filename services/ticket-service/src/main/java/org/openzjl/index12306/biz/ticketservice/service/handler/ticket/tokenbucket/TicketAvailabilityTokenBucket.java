@@ -13,7 +13,9 @@ import org.openzjl.index12306.biz.ticketservice.dto.domain.RouteDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.domain.SeatTypeCountDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.req.PurchaseTicketPassengerDetailDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.req.PurchaseTicketReqDTO;
+import org.openzjl.index12306.biz.ticketservice.dto.resp.TicketOrderDetailRespDTO;
 import org.openzjl.index12306.biz.ticketservice.enums.VehicleTypeEnum;
+import org.openzjl.index12306.biz.ticketservice.remote.dto.TicketOrderPassengerDetailRespDTO;
 import org.openzjl.index12306.biz.ticketservice.service.SeatService;
 import org.openzjl.index12306.biz.ticketservice.service.TrainStationService;
 import org.openzjl.index12306.biz.ticketservice.service.handler.ticket.dto.TokenResultDTO;
@@ -32,6 +34,7 @@ import org.springframework.stereotype.Component;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -262,5 +265,132 @@ public final class TicketAvailabilityTokenBucket {
         return result == null
                 ? TokenResultDTO.builder().tokenIsNull(Boolean.TRUE).build()
                 : result;
+    }
+
+    /**
+     * 回滚列车余量令牌（将已扣减的令牌重新加回到令牌桶中）
+     * <p>
+     * 使用场景：
+     * 1. 订单取消：用户主动取消订单，需要将已扣减的余票重新释放
+     * 2. 订单超时未支付：订单创建后长时间未支付，系统自动取消订单并释放余票
+     * 3. 订单支付失败：支付过程中出现异常，需要回滚已扣减的令牌
+     * <p>
+     * 工作流程：
+     * 1. 加载回滚令牌的Lua脚本（使用单例模式，避免重复加载）
+     * 2. 从订单信息中提取乘客详情，统计按座位类型的分组和数量
+     * 3. 将统计结果转换为JSON格式，供Lua脚本使用
+     * 4. 计算订单涉及的路线段（出发站到到达站的所有中间路线）
+     * 5. 执行Lua脚本，原子性地将令牌加回到令牌桶中
+     * 6. 检查执行结果，如果失败则记录日志并抛出异常
+     * <p>
+     * 核心设计思想：
+     * 1. 原子性操作：使用Lua脚本保证回滚操作的原子性，确保在高并发场景下不会出现数据不一致
+     * 2. 路线段回滚：订单取消时，需要将之前扣减的所有相关路线段的令牌都加回去
+     *    例如：用户购买了A->D的票，回滚时需要将A->B、A->C、A->D、B->C、B->D、C->D所有路线段的令牌都加回去
+     * 3. 返回值检查：Lua脚本返回0表示成功，非0或null表示失败，需要记录日志并抛出异常
+     *
+     * @param requestParam 订单详情，包含车次ID、出发站、到达站、乘客信息等，用于回滚令牌
+     * @throws ServiceException 如果回滚失败，抛出业务异常
+     */
+    public void rollbackInBucket(TicketOrderDetailRespDTO requestParam) {
+        // 加载回滚令牌的Lua脚本（使用单例模式，避免重复加载和解析脚本文件）
+        // Lua脚本用于原子性地将令牌加回到令牌桶中，确保在高并发场景下不会出现数据不一致
+        DefaultRedisScript<Long> actual = Singleton.get(LUA_TICKET_AVAILABILITY_ROLLBACK_TOKEN_BUCKET_PATH, () -> {
+            DefaultRedisScript<Long> redisScript = new DefaultRedisScript<>();
+            // 从classpath加载Lua脚本文件
+            redisScript.setScriptSource(new ResourceScriptSource(new ClassPathResource(LUA_TICKET_AVAILABILITY_ROLLBACK_TOKEN_BUCKET_PATH)));
+            // 设置返回类型为Long（Lua脚本返回0表示成功，非0表示失败）
+            redisScript.setResultType(Long.class);
+            return redisScript;
+        });
+
+        // 断言脚本加载成功，如果为null则抛出异常
+        Assert.notNull(actual);
+        
+        // 从订单信息中提取乘客详情列表
+        List<TicketOrderPassengerDetailRespDTO> passengerDetails = requestParam.getPassengerDetails();
+        
+        // 统计乘客按座位类型的分组和数量
+        // 例如：如果订单包含2张商务座和3张一等座，则结果为：{0: 2, 1: 3}
+        // 其中0表示商务座编码，1表示一等座编码
+        Map<Integer, Long> seatTypeCountMap = passengerDetails.stream()
+                .collect(Collectors.groupingBy(TicketOrderPassengerDetailRespDTO::getSeatType, Collectors.counting()));
+        
+        // 将统计结果转换为JSONArray格式，供Lua脚本使用
+        // 转换后的格式示例：[{"seatType":"0","count":"2"},{"seatType":"1","count":"3"}]
+        // 这样Lua脚本可以方便地解析和处理
+        JSONArray seatTypeCountArray = seatTypeCountMap.entrySet().stream()
+                .map(entry -> {
+                    JSONObject jsonObject = new JSONObject();
+                    // 座位类型编码（如：0=商务座，1=一等座）
+                    jsonObject.put("seatType", String.valueOf(entry.getKey()));
+                    // 该座位类型的回滚数量（需要加回的令牌数量）
+                    jsonObject.put("count", String.valueOf(entry.getValue()));
+                    return jsonObject;
+                })
+                .collect(Collectors.toCollection(JSONArray::new));
+        
+        // 获取Redis操作模板，用于执行Lua脚本
+        StringRedisTemplate stringRedisTemplate = (StringRedisTemplate) distributedCache.getInstance();
+        
+        // 构建令牌桶的Redis Key，格式：TICKET_AVAILABILITY_TOKEN_BUCKET + 车次ID
+        // 这个Key指向存储该车次所有路线和座位类型余票信息的Hash结构
+        String actualHashKey = TICKET_AVAILABILITY_TOKEN_BUCKET + requestParam.getTrainId();
+        
+        // 构建Lua脚本的Key，用于标识本次回滚的路线
+        // 格式：出发站_到达站（如：1001_1002）
+        // 这个Key会传递给Lua脚本，用于在令牌桶中查找对应的余票信息
+        String luaScriptKey = StrUtil.join("_", requestParam.getDeparture(), requestParam.getArrival());
+        
+        // 计算订单涉及的路线段（出发站到到达站的所有中间路线）
+        // 例如：订单是从A站到D站，需要回滚的路线包括：A->B、A->C、A->D、B->C、B->D、C->D
+        // 这是回滚的关键：必须将之前扣减的所有相关路线段的令牌都加回去
+        List<RouteDTO> takeoutTrainStationRoute = trainStationService.listTakeoutTrainStationRoute(
+                String.valueOf(requestParam.getTrainId()), requestParam.getDeparture(), requestParam.getArrival()
+        );
+        
+        // 执行Lua脚本，原子性地将令牌加回到令牌桶中
+        // 参数说明：
+        // - actual: Lua脚本对象
+        // - Lists.newArrayList(actualHashKey, luaScriptKey): Redis的Key列表
+        //   - actualHashKey: 令牌桶的Hash Key（包含该车次所有路线的余票信息）
+        //   - luaScriptKey: 本次回滚的路线标识（出发站_到达站）
+        // - JSON.toJSONString(seatTypeCountArray): 座位类型和数量的JSON字符串
+        // - JSON.toJSONString(takeoutTrainStationRoute): 需要回滚的路线段列表的JSON字符串
+        // 
+        // Lua脚本的执行逻辑（在Redis服务器端原子性执行）：
+        // 1. 遍历所有相关路线段，将对应座位类型的令牌数量加回去
+        // 2. 返回执行结果：0表示成功，非0表示失败
+        // 
+        // 原子性保证：整个回滚过程在Redis服务器端一次性完成，不会出现并发问题
+        Long result = stringRedisTemplate.execute(actual, Lists.newArrayList(actualHashKey, luaScriptKey), JSON.toJSONString(seatTypeCountArray), JSON.toJSONString(takeoutTrainStationRoute));
+        
+        // 检查执行结果
+        // Lua脚本返回0表示成功，非0或null表示失败
+        // 如果失败，记录错误日志（包含订单信息）并抛出业务异常
+        if (result == null || !Objects.equals(result, 0L)) {
+            log.error("回滚列车余票令牌失败，订单信息: {}", JSON.toJSONString(requestParam));
+            throw new ServiceException("回滚列车余票令牌失败！");
+        }
+    }
+
+    /**
+     * 删除令牌
+     * 一般在令牌与数据库不一致的情况下触发
+     *
+     * @param requestParam 删除令牌容器参数
+     */
+    public void delTokenInBucket(PurchaseTicketReqDTO requestParam) {
+        StringRedisTemplate stringRedisTemplate = (StringRedisTemplate) distributedCache.getInstance();
+        String tokenBucketHashKey = TICKET_AVAILABILITY_TOKEN_BUCKET + requestParam.getTrainId();
+        stringRedisTemplate.delete(tokenBucketHashKey);
+    }
+
+    public void putTokenInBucket() {
+
+    }
+
+    public void initializeTokens() {
+
     }
 }
