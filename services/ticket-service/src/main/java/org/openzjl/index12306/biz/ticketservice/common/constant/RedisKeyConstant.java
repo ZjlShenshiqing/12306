@@ -58,4 +58,14 @@ public class RedisKeyConstant {
      * 列车购买令牌桶加载数据key
      */
     public static final String LOCK_TICKET_AVAILABILITY_TOKEN_BUCKET = "index12306-ticket-service:lock_ticket_availability_token_bucket:%s";
+
+    /**
+     * 地区与站点映射查询
+     */
+    public static final String REGION_TRAIN_STATION_MAPPING = "index12306-ticket-service:region_train_station_mapping";
+
+    /**
+     * 地区站点查询分布式锁Key
+     */
+    public static final String LOCK_REGION_TRAIN_STATION_MAPPING = "index12306-ticket-service:lock:region_train_station_mapping";
 }
