@@ -1,29 +1,39 @@
 package org.openzjl.index12306.biz.ticketservice.service.handler.ticket.tokenbucket;
 
 import cn.hutool.core.util.StrUtil;
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
+import com.alibaba.fastjson2.JSONObject;
+import com.google.common.collect.Lists;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.openzjl.index12306.biz.ticketservice.dao.entity.TrainDO;
 import org.openzjl.index12306.biz.ticketservice.dao.mapper.TrainMapper;
 import org.openzjl.index12306.biz.ticketservice.dto.domain.RouteDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.domain.SeatTypeCountDTO;
+import org.openzjl.index12306.biz.ticketservice.dto.req.PurchaseTicketPassengerDetailDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.req.PurchaseTicketReqDTO;
 import org.openzjl.index12306.biz.ticketservice.enums.VehicleTypeEnum;
 import org.openzjl.index12306.biz.ticketservice.service.SeatService;
 import org.openzjl.index12306.biz.ticketservice.service.TrainStationService;
 import org.openzjl.index12306.biz.ticketservice.service.handler.ticket.dto.TokenResultDTO;
+import org.openzjl.index12306.framework.starter.bases.Singleton;
 import org.openzjl.index12306.framework.starter.cache.DistributedCache;
 import org.openzjl.index12306.framework.starter.convention.exception.ServiceException;
+import org.openzjl.index12306.framework.starter.log.toolkit.Assert;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.scripting.support.ResourceScriptSource;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.openzjl.index12306.biz.ticketservice.common.constant.Index12306Constant.ADVANCE_TICKET_DAY;
 import static org.openzjl.index12306.biz.ticketservice.common.constant.RedisKeyConstant.*;
@@ -58,15 +68,34 @@ public final class TicketAvailabilityTokenBucket {
      * 2. 原子性地检查和扣减余票，防止超卖
      * 3. 限流控制，避免无效请求占用系统资源
      * <p>
-     * 工作流程：
-     * 1. 检查令牌桶是否存在，不存在则初始化（从数据库加载余票数据）
-     * 2. 使用Lua脚本原子性地检查是否有足够的令牌
-     * 3. 如果有令牌，原子性地扣减对应路线的令牌数量
-     * 4. 返回结果，告知是否可以继续购票流程
+     * 完整工作流程：
+     * <p>
+     * 第一阶段：令牌桶初始化（如果不存在）
+     * 1. 获取列车基础信息（从缓存或数据库）
+     * 2. 计算需要扣减余票的所有路线段（防止超卖的关键）
+     * 3. 检查令牌桶是否存在，不存在则使用分布式锁进行初始化
+     * 4. 初始化过程：查询数据库获取所有路线和座位类型的余票数量，存入Redis Hash结构
+     * <p>
+     * 第二阶段：执行令牌扣减（使用Lua脚本保证原子性）
+     * 1. 加载Lua脚本（使用单例模式，避免重复加载）
+     * 2. 统计乘客按座位类型的分组和数量（例如：2张商务座、3张一等座）
+     * 3. 将统计结果转换为JSON格式，供Lua脚本使用
+     * 4. 计算用户选择的路线段（出发站到到达站的所有中间路线）
+     * 5. 执行Lua脚本，原子性地检查并扣减令牌：
+     *    - 检查所有相关路线的余票是否充足
+     *    - 如果充足，原子性地扣减对应路线的令牌数量
+     *    - 返回扣减结果
+     * 6. 解析Lua脚本返回的结果，返回给调用方
      * <p>
      * 返回值说明：
-     * - tokenIsNull = false：有令牌，可以继续购票流程
+     * - tokenIsNull = false：有令牌，已成功扣减，可以继续购票流程
      * - tokenIsNull = true：无令牌，余票不足，拒绝购票请求
+     * <p>
+     * 核心设计思想：
+     * 1. 令牌桶模式：将余票抽象为令牌，提前在Redis中维护，避免频繁查询数据库
+     * 2. 原子性操作：使用Lua脚本保证检查和扣减的原子性，防止超卖
+     * 3. 路线段扣减：用户购买A->D的票，需要扣减A->B、A->C、A->D、B->C、B->D、C->D所有路线段的余票
+     *    这样确保不会出现超卖：即使A->D有票，但如果A->B已经没票了，A->D也不能卖
      *
      * @param requestParam 购票请求参数，包含车次ID、出发站、到达站、乘客信息等
      * @return 令牌获取结果，包含是否有令牌、以及无令牌时的详细信息
@@ -158,7 +187,80 @@ public final class TicketAvailabilityTokenBucket {
             }
         }
 
-        DefaultRedisScript<String> actual = null;
-        return null;
+        // 执行令牌扣减操作
+        
+        // 加载Lua脚本（使用单例模式，避免重复加载和解析脚本文件）
+        // Lua脚本用于原子性地检查和扣减令牌，确保在高并发场景下不会出现超卖问题
+        // Singleton.get() 确保同一个脚本路径只加载一次，提高性能
+        DefaultRedisScript<String> actual = Singleton.get(LUA_TICKET_AVAILABILITY_TOKEN_BUCKET_PATH, () -> {
+            DefaultRedisScript<String> redisScript = new DefaultRedisScript<>();
+            // 从classpath加载Lua脚本文件
+            redisScript.setScriptSource(new ResourceScriptSource(new ClassPathResource(LUA_TICKET_AVAILABILITY_TOKEN_BUCKET_PATH)));
+            // 设置返回类型为String（Lua脚本返回JSON字符串）
+            redisScript.setResultType(String.class);
+            return redisScript;
+        });
+        // 断言脚本加载成功，如果为null则抛出异常
+        Assert.notNull(actual);
+        
+        // 统计乘客按座位类型的分组和数量
+        // 例如：如果用户购买2张商务座和3张一等座，则结果为：{0: 2, 1: 3}
+        // 其中0表示商务座编码，1表示一等座编码
+        Map<Integer, Long> seatTypeCountMap = requestParam.getPassengers().stream()
+                .collect(Collectors.groupingBy(PurchaseTicketPassengerDetailDTO::getSeatType, Collectors.counting()));
+        
+        // 将统计结果转换为JSONArray格式，供Lua脚本使用
+        // 转换后的格式示例：[{"seatType":"0","count":"2"},{"seatType":"1","count":"3"}]
+        // 这样Lua脚本可以方便地解析和处理
+        JSONArray seatTypeCountArray = seatTypeCountMap.entrySet().stream()
+                .map(entry -> {
+                    JSONObject jsonObject = new JSONObject();
+                    // 座位类型编码（如：0=商务座，1=一等座）
+                    jsonObject.put("seatType", String.valueOf(entry.getKey()));
+                    // 该座位类型的购买数量
+                    jsonObject.put("count", String.valueOf(entry.getValue()));
+                    return jsonObject;
+                })
+                .collect(Collectors.toCollection(JSONArray::new));
+        
+        // 计算用户选择的路线段（出发站到到达站的所有中间路线）
+        // 例如：用户从A站到D站，需要扣减的路线包括：A->B、A->C、A->D、B->C、B->D、C->D
+        // 这是防止超卖的关键：必须确保所有相关路线段都有足够的余票
+        List<RouteDTO> takeoutRouteDTOList = trainStationService
+                .listTakeoutTrainStationRoute(requestParam.getTrainId(), requestParam.getDeparture(), requestParam.getArrival());
+        
+        // 构建Lua脚本的Key，用于标识本次购票请求的路线
+        // 格式：出发站_到达站（如：1001_1002）
+        // 这个Key会传递给Lua脚本，用于在令牌桶中查找对应的余票信息
+        String luaScriptKey = StrUtil.join("_", requestParam.getDeparture(), requestParam.getArrival());
+        
+        // 执行Lua脚本，原子性地检查并扣减令牌
+        // 参数说明：
+        // - actual: Lua脚本对象
+        // - Lists.newArrayList(tokenBucketHashKey, luaScriptKey): Redis的Key列表
+        //   - tokenBucketHashKey: 令牌桶的Hash Key（包含该车次所有路线的余票信息）
+        //   - luaScriptKey: 本次购票的路线标识（出发站_到达站）
+        // - JSON.toJSONString(seatTypeCountArray): 座位类型和数量的JSON字符串
+        // - JSON.toJSONString(takeoutRouteDTOList): 需要扣减的路线段列表的JSON字符串
+        // 
+        // Lua脚本的执行逻辑（在Redis服务器端原子性执行）：
+        // 1. 检查所有相关路线段的余票是否充足
+        // 2. 如果充足，原子性地扣减对应路线的令牌数量
+        // 3. 返回扣减结果（JSON格式的TokenResultDTO字符串）
+        // 
+        // 原子性保证：整个检查和扣减过程在Redis服务器端一次性完成，不会出现并发问题
+        String resultStr = stringRedisTemplate
+                .execute(actual, Lists.newArrayList(tokenBucketHashKey, luaScriptKey), JSON.toJSONString(seatTypeCountArray), JSON.toJSONString(takeoutRouteDTOList));
+        
+        // 解析Lua脚本返回的结果
+        // Lua脚本返回的是JSON字符串，需要反序列化为TokenResultDTO对象
+        TokenResultDTO result = JSON.parseObject(resultStr, TokenResultDTO.class);
+        
+        // 处理结果并返回
+        // 如果结果为null（可能是Lua脚本执行异常或返回空），则返回无令牌的结果
+        // 否则返回Lua脚本的执行结果（包含是否成功扣减令牌的信息）
+        return result == null
+                ? TokenResultDTO.builder().tokenIsNull(Boolean.TRUE).build()
+                : result;
     }
 }
