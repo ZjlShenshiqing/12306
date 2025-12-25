@@ -14,7 +14,7 @@
 --   失败：{"tokenIsNull":true,"tokenIsNullSeatTypeCounts":["0_2","1_3"]}
 -- ============================================
 
--- ========== 第一步：处理路线标识，提取实际的Key ==========
+-- ========== 处理路线标识，提取实际的Key ==========
 -- KEYS[2] 可能包含Redis前缀（如：index12306-ticket-service:1001_1002）
 -- 需要提取出实际的路线标识（如：1001_1002）
 local inputString = KEYS[2]
@@ -25,19 +25,19 @@ if colonIndex ~= nil then
     actualKey = string.sub(actualKey, colonIndex + 1)
 end
 
--- ========== 第二步：解析座位类型和数量的JSON数组 ==========
+-- ========== 解析座位类型和数量的JSON数组 ==========
 -- ARGV[1] 是座位类型和购买数量的JSON字符串
 -- 例如：[{"seatType":"0","count":"2"},{"seatType":"1","count":"3"}]
 -- 表示：购买2张商务座（编码0）和3张一等座（编码1）
 local jsonArrayStr = ARGV[1]
 local jsonArray = cjson.decode(jsonArrayStr)
 
--- ========== 第三步：初始化结果变量 ==========
+-- ========== 初始化结果变量 ==========
 local result = {}                    -- 返回结果对象
 local tokenIsNull = false            -- 令牌是否为空（余票是否不足）
 local tokenIsNullSeatTypeCounts = {} -- 余票不足的座位类型和数量列表
 
--- ========== 第四步：检查所有座位类型的余票是否充足 ==========
+-- ========== 检查所有座位类型的余票是否充足 ==========
 -- 遍历用户要购买的每种座位类型，检查余票是否足够
 for index, jsonObj in ipairs(jsonArray) do
     -- 获取座位类型编码（如：0=商务座，1=一等座）
@@ -62,7 +62,7 @@ for index, jsonObj in ipairs(jsonArray) do
     end
 end
 
--- ========== 第五步：如果余票不足，直接返回结果 ==========
+-- ========== 如果余票不足，直接返回结果 ==========
 -- 构建返回结果
 result['tokenIsNull'] = tokenIsNull
 if tokenIsNull then
@@ -72,14 +72,14 @@ if tokenIsNull then
     return cjson.encode(result)
 end
 
--- ========== 第六步：余票充足，解析路线段数组，准备扣减 ==========
+-- ========== 余票充足，解析路线段数组，准备扣减 ==========
 -- ARGV[2] 是需要扣减余票的所有路线段的JSON字符串
 -- 例如：[{"startStation":"1001","endStation":"1002"},{"startStation":"1001","endStation":"1003"},...]
 -- 用户购买A->D的票，需要扣减A->B、A->C、A->D、B->C、B->D、C->D所有路线段的余票
 local alongJsonArrayStr = ARGV[2]
 local alongJsonArray = cjson.decode(alongJsonArrayStr)
 
--- ========== 第七步：原子性地扣减所有相关路线段的余票 ==========
+-- ========== 原子性地扣减所有相关路线段的余票 ==========
 -- 遍历用户要购买的每种座位类型
 for index, jsonObj in ipairs(jsonArray) do
     local seatType = tonumber(jsonObj.seatType)
@@ -101,7 +101,7 @@ for index, jsonObj in ipairs(jsonArray) do
     end
 end
 
--- ========== 第八步：返回成功结果 ==========
+-- ========== 返回成功结果 ==========
 -- 所有检查和扣减操作都成功完成，返回成功结果
 -- result['tokenIsNull'] = false（默认值）
 return cjson.encode(result)
