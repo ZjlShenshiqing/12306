@@ -74,7 +74,7 @@ public class TicketListDTO {
     /**
      * 可售时间
      */
-    private Integer saleTime;
+    private String saleTime;
 
     /**
      * 销售状态
