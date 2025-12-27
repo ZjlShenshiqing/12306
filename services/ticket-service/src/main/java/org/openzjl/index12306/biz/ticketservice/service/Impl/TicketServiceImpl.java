@@ -19,6 +19,8 @@ import org.openzjl.index12306.biz.ticketservice.dto.req.PurchaseTicketReqDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.req.RefundTicketReqDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.req.TicketPageQueryReqDTO;
 import org.openzjl.index12306.biz.ticketservice.enums.TicketChainMarkEnum;
+import org.openzjl.index12306.biz.ticketservice.enums.VehicleSeatTypeEnum;
+import org.openzjl.index12306.biz.ticketservice.enums.VehicleTypeEnum;
 import org.openzjl.index12306.biz.ticketservice.remote.dto.PayInfoRespDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.resp.RefundTicketRespDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.resp.TicketPageQueryRespDTO;
@@ -39,11 +41,13 @@ import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -390,9 +394,313 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
                 .build();
     }
 
+    /**
+     * 车票查询V2版本（优化版）
+     * <p>
+     * ========== V2版本与V1版本的核心差异 ==========
+     * <p>
+     * 【V1版本的问题】：
+     * 1. 逐个查询座位价格：使用distributedCache.safeGet()，每个车次路线都要单独执行一次Redis GET命令
+     *    - 如果有100个车次路线，就需要100次网络往返（RTT）
+     *    - 每次网络往返耗时约1-5ms，100次就是100-500ms
+     * <p>
+     * 2. 逐个查询余票：在forEach循环中，每个座位类型都要单独执行一次HGET命令
+     *    - 如果有100个车次路线，每个路线3种座位类型，就需要300次网络往返
+     *    - 300次网络往返耗时约300-1500ms
+     * <p>
+     * 3. 双重检查锁定：需要获取分布式锁，检查缓存，可能查询数据库
+     *    - 锁竞争导致线程等待
+     *    - 数据库查询耗时更长（10-100ms）
+     * <p>
+     * 【V2版本的优化】：
+     * 1. 批量查询座位价格：使用Redis Pipeline一次性批量查询所有车次路线的座位价格
+     *    - 100个车次路线只需要1次网络往返
+     *    - 性能提升：100倍（从100次减少到1次）
+     * <p>
+     * 2. 批量查询余票：使用Redis Pipeline一次性批量查询所有座位类型的余票
+     *    - 300个座位类型只需要1次网络往返
+     *    - 性能提升：300倍（从300次减少到1次）
+     * <p>
+     * 3. 假设缓存已存在：直接从缓存读取，无需双重检查锁定和数据库查询
+     *    - 避免锁竞争
+     *    - 避免数据库查询延迟
+     * <p>
+     * 【性能提升计算】：
+     * 假设查询100个车次路线，每个路线3种座位类型：
+     * - V1版本：100次GET + 300次HGET = 400次网络往返 ≈ 400-2000ms
+     * - V2版本：1次Pipeline(GET) + 1次Pipeline(HGET) = 2次网络往返 ≈ 2-10ms
+     * - 性能提升：200-1000倍
+     * <p>
+     * ========== 数据获取顺序说明 ==========
+     * <p>
+     * 【第一步】责任链处理
+     *   - 执行参数校验、权限校验等前置处理
+     * <p>
+     * 【第二步】获取站点地区信息
+     *   - 从Redis Hash (REGION_TRAIN_STATION_MAPPING) 获取出发站和到达站所属的地区
+     *   - 目的：确定查询的地区范围（如：华北 -> 华东）
+     * <p>
+     * 【第三步】获取车次路线信息列表
+     *   - 构建地区列车站点缓存的Redis Hash Key（格式：REGION_TRAIN_STATION + 出发地区 + 到达地区）
+     *   - 从Redis Hash中获取该地区对的所有车次路线信息（车次ID、出发站、到达站、出发时间等）
+     *   - 解析JSON字符串为TicketListDTO对象列表，并按出发时间排序
+     *   - 此时得到：车次路线列表（但还没有座位价格和余票信息）
+     *   - 注意：这里存储的是"车次路线信息"，不是用户购买的"车票"
+     * <p>
+     * 【第四步】批量获取座位价格信息
+     *   - 为每个车次路线构建座位价格缓存的Redis Key（格式：TRAIN_STATION_PRICE + 车次ID_出发站_到达站）
+     *   - 使用Redis Pipeline批量执行GET命令，获取所有车次路线的座位价格数据（JSON字符串）
+     *   - 此时得到：每个车次路线的座位价格列表（商务座、一等座、二等座的价格）
+     * <p>
+     * 【第五步】批量获取余票数量
+     *   - 解析座位价格数据，为每个座位类型构建余票缓存的Redis Hash Key
+     *   - 使用Redis Pipeline批量执行HGET命令，获取每个座位类型的余票数量
+     *   - 此时得到：每个座位类型的余票数量
+     * <p>
+     * 最终数据组装：
+     *   - 将车次路线信息 + 座位价格 + 余票数量 组装成完整的响应对象返回给前端
+     * <p>
+     * 性能优化点：
+     *   1. 使用Redis Pipeline批量查询，减少网络往返次数（核心优化）
+     *   2. 直接从缓存读取，避免数据库查询
+     *   3. 数据按地区分组缓存，提高查询效率
+     *   4. 避免分布式锁竞争，提升并发性能
+     *
+     * @param requestParam 车票查询请求参数（包含出发站、到达站、出发日期等）
+     * @return 车票查询响应对象（包含车票列表、筛选选项等）
+     */
     @Override
     public TicketPageQueryRespDTO pageListTicketQueryV2(TicketPageQueryReqDTO requestParam) {
-        return null;
+        // 执行责任链处理
+        // 触发车票查询责任链，执行一系列前置处理（如参数校验、权限校验等）
+        ticketPageQueryAbstractChainContext.handler(
+                TicketChainMarkEnum.TRAIN_QUERY_FILTER.name(), requestParam
+        );
+        
+        // 获取Redis操作模板
+        StringRedisTemplate stringRedisTemplate = (StringRedisTemplate) distributedCache.getInstance();
+        
+        // 获取出发站和到达站所属的地区
+        List<Object> stationDetails = stringRedisTemplate.opsForHash()
+                .multiGet(REGION_TRAIN_STATION_MAPPING, Lists.newArrayList(requestParam.getFromStation(), requestParam.getToStation()));
+        
+        // 构建地区列车站点缓存的Redis Hash Key
+        // 格式：REGION_TRAIN_STATION + 出发地区 + 到达地区
+        // 例如：index12306-ticket-service:region_train_station:华北:华东
+        // stationDetails.get(0) 是出发站所在地区，stationDetails.get(1) 是到达站所在地区
+        String buildRegionTrainStationHashKey = String.format(REGION_TRAIN_STATION, stationDetails.get(0), stationDetails.get(1));
+        
+        // 从Redis Hash中获取该地区对的所有车次路线信息
+        // entries() 方法获取Hash中的所有字段和值
+        // Hash Field: 车次ID_出发站_到达站（如：G123_1001_2001）
+        // Hash Value: 车次路线信息的JSON字符串（包含车次ID、出发站、到达站、出发时间等）
+        Map<Object, Object> regionTrainStationAllMap = stringRedisTemplate.opsForHash().entries(buildRegionTrainStationHashKey);
+
+        // 将缓存中的JSON字符串解析为TicketListDTO对象列表（车次路线信息）
+        // 然后按出发时间从早到晚排序
+        // 注意：这里存储的是"车次路线信息"，不是用户购买的"车票"
+        // 每个条目代表一个车次在特定出发站和到达站之间的运行信息
+        List<TicketListDTO> trainRouteResults = regionTrainStationAllMap.values().stream()
+                // 将每个JSON字符串解析为TicketListDTO对象
+                // each是Object类型（实际是JSON字符串），需要先转为String再解析
+                .map(each -> JSON.parseObject(each.toString(), TicketListDTO.class))
+                .sorted(new TimeStringComparator())
+                // 收集为List集合
+                .collect(Collectors.toList());
+
+        // 构建所有车次路线的座位价格缓存Key列表
+        // 作用：为每个车次路线构建对应的Redis缓存Key，用于后续批量查询座位价格信息
+        // 
+        // 背景说明：
+        // - trainRouteResults 是查询到的车次路线列表，每个路线包含：车次ID、出发站、到达站等信息
+        // - 但是车次路线的座位价格信息（商务座多少钱、一等座多少钱等）存储在Redis中
+        // - Redis中每个车次路线的座位价格用一个Key存储，格式为：车次ID_出发站_到达站
+        // 
+        // 举例说明：
+        // 假设查询到3个车次路线：
+        //   路线1：G123次，北京(1001) -> 上海(2001)
+        //   路线2：G456次，北京(1001) -> 广州(3001)
+        //   路线3：D789次，上海(2001) -> 杭州(4001)
+        // 
+        // 这段代码会构建3个Redis Key：
+        //   Key1: index12306-ticket-service:train_station_price:G123_1001_2001
+        //   Key2: index12306-ticket-service:train_station_price:G456_1001_3001
+        //   Key3: index12306-ticket-service:train_station_price:D789_2001_4001
+        // 
+        // 这些Key用于后续从Redis中批量查询每个车次路线的座位价格信息
+        List<String> trainStationPriceKeys = trainRouteResults.stream()
+                // 遍历每个车次路线，为每个路线构建一个Redis Key
+                // String.format() 将车次ID、出发站、到达站填充到TRAIN_STATION_PRICE模板中
+                // 
+                // 模板格式：TRAIN_STATION_PRICE = "index12306-ticket-service:train_station_price:%s_%s_%s"
+                // 填充示例：
+                //   - 车次ID: "G123"
+                //   - 出发站: "1001"
+                //   - 到达站: "2001"
+                //   - 结果: "index12306-ticket-service:train_station_price:G123_1001_2001"
+                .map(each -> String.format(cacheRedisPrefix + TRAIN_STATION_PRICE, each.getTrainId(), each.getDeparture(), each.getArrival()))
+                // 收集为List集合，得到所有车票的Redis Key列表
+                .collect(Collectors.toList());
+
+
+        // 使用Pipeline技术批量执行Redis GET命令，大幅提升性能
+        // Pipeline原理：将多个命令打包发送给Redis，减少网络往返次数（RTT）
+        // 性能提升：如果有100个Key需要查询，使用Pipeline可以将100次网络往返减少到1次
+        // 注意：Pipeline中的命令是原子执行的，但Pipeline本身不是事务，中间某个命令失败不会回滚
+        // 
+        // 查询结果说明：
+        // - trainStationPriceObjs 是一个 List<Object>，每个元素对应一个车次路线的座位价格数据
+        // - 包含该车次路线所有座位类型的价格信息（商务座、一等座、二等座等）
+        List<Object> trainStationPriceObjs = stringRedisTemplate.executePipelined((RedisCallback<String>) connection -> {
+
+            // connection.stringCommands().get() 执行Redis GET命令
+            // getBytes() 将字符串Key转换为字节数组（Redis底层使用字节数组存储）
+            // 为每个车次路线的座位价格缓存Key执行GET命令
+            trainStationPriceKeys.forEach(each -> connection.stringCommands().get(each.getBytes()));
+            // RedisCallback必须返回一个值，这里返回null即可, 实际返回的数据在executePipelined()的返回值中
+            return null;
+        });
+
+        // 解析座位价格数据并构建余票缓存Key列表
+        // 存储所有座位价格对象
+        // 例如：如果有3个车票，每个车票有3种座位类型，则这个列表包含9个TrainStationPriceDO对象
+        List<TrainStationPriceDO> trainStationPriceList = new ArrayList<>();
+        
+        // 存储所有余票缓存的Redis Hash Key列表
+        // 每个Key对应一个车次+出发站+到达站的组合，用于查询该路段的余票信息
+        // Key格式：cacheRedisPrefix + TRAIN_STATION_REMAINING_TICKET + 车次ID_出发站_到达站
+        // 例如：index12306-ticket-service:train_station_remaining_ticket:G123_1001_2001
+        List<String> trainStationRemainingKeyList = new ArrayList<>();
+        
+
+        // 遍历返回的座位价格数据, each是包含一个车票的所有座位类型价格信息
+        for (Object each : trainStationPriceObjs) {
+            // 将JSON数组字符串解析为TrainStationPriceDO对象列表
+            // 例如：JSON字符串 "[{trainId:'G123',seatType:0,price:1000,...}, {trainId:'G123',seatType:1,price:500,...}]" 解析为包含2个TrainStationPriceDO对象的列表
+            List<TrainStationPriceDO> trainStationPriceDOList = JSON.parseArray(each.toString(), TrainStationPriceDO.class);
+            
+            // 将所有座位价格对象添加到总列表中
+            // 这样可以将多个车票的座位价格合并到一个列表中，方便后续批量处理
+            trainStationPriceList.addAll(trainStationPriceDOList);
+            
+            // 为每个座位价格对象构建对应的余票缓存Key
+            for (TrainStationPriceDO item : trainStationPriceDOList) {
+                // 格式：cacheRedisPrefix + TRAIN_STATION_REMAINING_TICKET + 车次ID_出发站_到达站
+                // 例如：index12306-ticket-service:train_station_remaining_ticket:G123_1001_2001
+                String trainStationRemainingKey = cacheRedisPrefix + TRAIN_STATION_REMAINING_TICKET + StrUtil.join("_", item.getTrainId(), item.getDeparture(), item.getArrival());
+                
+                // 将Key添加到列表中
+                // 注意：trainStationRemainingKeyList和trainStationPriceList的索引是一一对应的
+                // 即 trainStationRemainingKeyList.get(i) 对应的余票Key
+                // 用于查询 trainStationPriceList.get(i) 这个座位价格对象对应的余票数量
+                trainStationRemainingKeyList.add(trainStationRemainingKey);
+            }
+        }
+        
+        // 批量获取余票数量
+        // 结构层次：
+        // - Hash Key（外层Key）：标识一个车次路线的余票信息
+        //   格式：TRAIN_STATION_REMAINING_TICKET + 车次ID_出发站_到达站
+        //   例如："index12306-ticket-service:train_station_remaining_ticket:G123_1001_2001"
+        //   含义：G123次列车从北京(1001)到上海(2001)的余票信息
+        // 
+        // - Hash Field（内层字段名）：座位类型编码
+        //   例如："0"（商务座）、"1"（一等座）、"2"（二等座）
+        // 
+        // - Hash Value（内层字段值）：该座位类型的余票数量
+        //   例如："10"（表示还有10张票）
+        // 
+        // 实际存储示例：
+        // Hash Key: "index12306-ticket-service:train_station_remaining_ticket:G123_1001_2001"
+        //   ├─ Field: "0" → Value: "10"  (商务座还有10张)
+        //   ├─ Field: "1" → Value: "25"  (一等座还有25张)
+        //   └─ Field: "2" → Value: "50"  (二等座还有50张)
+        List<Object> trainStationRemainingObjs = stringRedisTemplate.executePipelined((RedisCallback<String>) connection -> {
+            // 遍历所有Key和座位价格对象，为每个组合执行HGET命令
+            for (int i = 0; i < trainStationRemainingKeyList.size(); i++) {
+                // 执行Redis HGET命令，从Hash中获取指定座位类型的余票数量
+                // 参数1：Hash Key（转换为字节数组）
+                // 参数2：Hash Field（座位类型编码，转换为字节数组）
+                // 例如：HGET "index12306-ticket-service:train_station_remaining_ticket:G123_1001_2001" "0"
+                // 返回：该路段商务座的余票数量（如："10"）
+                connection.hashCommands().hGet(
+                        trainStationRemainingKeyList.get(i).getBytes(),  // Hash Key
+                        trainStationPriceList.get(i).getSeatType().toString().getBytes()  // Hash Field（座位类型）
+                );
+            }
+            // RedisCallback必须返回一个值，这里返回null即可, 实际返回的数据在executePipelined()的返回值中
+            return null;
+        });
+
+        // 为每个车次路线组装座位价格和余票信息
+        // 目的：将扁平化的座位价格和余票数据按照车次路线重新分组
+        // 
+        // 数据组织说明：
+        // - trainRouteResults: 车次路线列表，例如：[路线1(G123), 路线2(G456), 路线3(D789)]
+        // - trainStationPriceList: 扁平化的座位价格列表，按路线顺序排列
+        //   例如：[路线1的座位1, 路线1的座位2, 路线1的座位3, 路线2的座位1, 路线2的座位2, ...]
+        // - trainStationRemainingObjs: 扁平化的余票列表，与trainStationPriceList一一对应
+        //   例如：[路线1座位1余票, 路线1座位2余票, 路线1座位3余票, 路线2座位1余票, ...]
+        for (TicketListDTO each : trainRouteResults) {
+            // 根据车次类型获取该车次支持的座位类型列表
+            // 例如：高铁(G)可能有[0,1,2]（商务座、一等座、二等座），动车(D)可能有[1,2]（一等座、二等座）
+            List<Integer> seatTypesByCode = VehicleTypeEnum.findSeatTypeByCode(each.getTrainType());
+            
+            // 从扁平化的列表中提取当前车次路线的余票数据
+            // subList(currentIndex, currentIndex + seatTypesByCode.size()) 提取当前路线的所有座位类型余票
+            // 例如：如果当前路线有3种座位类型，且currentIndex=0，则提取索引[0,1,2]的数据
+            List<Object> remainingTicket = new ArrayList<>(trainStationRemainingObjs.subList(0, seatTypesByCode.size()));
+            
+            // 从扁平化的列表中提取当前车次路线的座位价格数据
+            // 与余票数据一一对应，索引范围相同
+            List<TrainStationPriceDO> trainStationPriceDOSub = new ArrayList<>(trainStationPriceList.subList(0, seatTypesByCode.size()));
+
+            // 构建座位类型详细信息列表
+            // 将座位价格和余票信息组装成SeatClassDTO对象，用于前端展示
+            List<SeatClassDTO> seatClassList = new ArrayList<>();
+            
+            // 遍历当前车次路线的所有座位类型，为每个座位类型构建详细信息
+            for (int i = 0; i < trainStationPriceDOSub.size(); i++) {
+                // 获取当前座位类型的价格信息
+                TrainStationPriceDO trainStationPriceDO = trainStationPriceDOSub.get(i);
+                
+                // 构建座位类型DTO对象，包含座位类型、余票数量、价格等信息
+                SeatClassDTO seatClassDTO = SeatClassDTO.builder()
+                        // 座位类型编码（如：0=商务座，1=一等座，2=二等座）
+                        .type(trainStationPriceDO.getSeatType())
+                        // 余票数量：从remainingTicket中获取，转换为整数
+                        // remainingTicket.get(i) 是Object类型（实际是String类型的数字），需要先转String再转Integer
+                        .quantity(Integer.parseInt(remainingTicket.get(i).toString()))
+                        // 座位价格：从分转换为元，保留1位小数，四舍五入
+                        // 数据库中价格以"分"为单位存储（如：1000分 = 10.0元），需要除以100转换为元
+                        .price(new BigDecimal(trainStationPriceDO.getPrice()).divide(new BigDecimal("100"), 1, RoundingMode.HALF_UP))
+                        // 是否作为候补选项（默认false，表示不是候补）
+                        .candidate(false)
+                        .build();
+                
+                // 将构建好的座位类型DTO添加到列表中
+                seatClassList.add(seatClassDTO);
+            }
+            
+            // 将座位类型列表设置到车次路线对象中
+            // 这样每个车次路线就包含了完整的座位价格和余票信息
+            each.setSeatClassList(seatClassList);
+        }
+        
+        // 构建并返回响应对象
+        // 将查询结果封装成响应对象，返回给前端
+        return TicketPageQueryRespDTO.builder()
+                // 车次路线列表（已包含座位价格和余票信息）
+                .ticketList(trainRouteResults)
+                // 出发站列表（去重后的出发站编码列表，用于前端筛选）
+                .departureStationList(buildDepartureStationList(trainRouteResults))
+                // 到达站列表（去重后的到达站编码列表，用于前端筛选）
+                .arrivalStationList(buildArrivalStationList(trainRouteResults))
+                // 列车品牌列表（去重后的列车品牌编码列表，用于前端筛选）
+                .trainBrandList(buildTrainBrandList(trainRouteResults))
+                // 座位类型列表（去重后的座位类型编码列表，用于前端筛选）
+                .seatClassTypeList(buildSeatClassList(trainRouteResults))
+                .build();
     }
 
     @Override
