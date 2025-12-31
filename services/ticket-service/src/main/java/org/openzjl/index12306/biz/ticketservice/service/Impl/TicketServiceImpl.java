@@ -7,6 +7,8 @@ import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.google.common.collect.Lists;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,9 +20,9 @@ import org.openzjl.index12306.biz.ticketservice.dto.req.CancelTicketOrderReqDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.req.PurchaseTicketReqDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.req.RefundTicketReqDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.req.TicketPageQueryReqDTO;
-import org.openzjl.index12306.biz.ticketservice.enums.TicketChainMarkEnum;
-import org.openzjl.index12306.biz.ticketservice.enums.VehicleSeatTypeEnum;
-import org.openzjl.index12306.biz.ticketservice.enums.VehicleTypeEnum;
+import org.openzjl.index12306.biz.ticketservice.dto.resp.TicketOrderDetailRespDTO;
+import org.openzjl.index12306.biz.ticketservice.common.enums.TicketChainMarkEnum;
+import org.openzjl.index12306.biz.ticketservice.common.enums.VehicleTypeEnum;
 import org.openzjl.index12306.biz.ticketservice.remote.dto.PayInfoRespDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.resp.RefundTicketRespDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.resp.TicketPageQueryRespDTO;
@@ -33,23 +35,30 @@ import org.openzjl.index12306.biz.ticketservice.service.cache.SeatMarginCacheLoa
 import org.openzjl.index12306.biz.ticketservice.service.handler.ticket.tokenbucket.TicketAvailabilityTokenBucket;
 import org.openzjl.index12306.biz.ticketservice.toolkit.DateUtil;
 import org.openzjl.index12306.biz.ticketservice.toolkit.TimeStringComparator;
+import org.openzjl.index12306.framework.starter.bases.ApplicationContextHolder;
 import org.openzjl.index12306.framework.starter.cache.DistributedCache;
 import org.openzjl.index12306.framework.starter.cache.toolkit.CacheUtil;
 import org.openzjl.index12306.framework.starter.designpattern.chain.AbstractChainContext;
+import org.openzjl.index12306.framework.starter.idempotent.annotation.Idempotent;
+import org.openzjl.index12306.framework.starter.idempotent.enums.IdempotentSceneEnum;
+import org.openzjl.index12306.framework.starter.idempotent.enums.IdempotentTypeEnum;
+import org.openzjl.index12306.framework.starter.log.annotation.ILog;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 import static org.openzjl.index12306.biz.ticketservice.common.constant.Index12306Constant.ADVANCE_TICKET_DAY;
@@ -83,6 +92,7 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
     private final AbstractChainContext<RefundTicketReqDTO> refundTicketAbstractChainContext;
     private final TicketAvailabilityTokenBucket ticketAvailabilityTokenBucket;
     private final SeatMarginCacheLoader seatMarginCacheLoader;
+    private final Environment environment;
     private TicketService ticketService;
 
     @Value("${ticket.availability.cache-update.type}")
@@ -91,6 +101,60 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
     @Value("${framework.cache.redis.prefix}")
     private String cacheRedisPrefix;
 
+    /**
+     * 本地锁缓存（JVM内锁）
+     * <p>
+     * 用途：用于在单个JVM实例内进行同步控制，避免使用分布式锁时的网络开销
+     * <p>
+     * 工作原理：
+     * - Key: 锁的唯一标识（如：车次ID_出发站_到达站）
+     * - Value: ReentrantLock对象，用于JVM内的线程同步
+     * - 过期时间：1天（写入后1天自动清理，防止内存泄漏）
+     * <p>
+     * 使用场景：
+     * - 当需要在单个服务实例内进行同步控制时（如：刷新某个车次的余票缓存）
+     * - 避免多个线程同时刷新同一个车次的缓存，造成重复查询数据库
+     * - 相比分布式锁，本地锁性能更好（无网络开销），但只能控制单个JVM内的线程
+     * <p>
+     * 注意事项：
+     * - 这是JVM级别的锁，不能跨服务实例同步
+     * - 如果需要跨服务实例同步，应使用分布式锁（Redisson）
+     * - 过期时间设置为1天，确保长时间不使用的锁能够自动清理
+     */
+    private final Cache<String, ReentrantLock> localLockMap = Caffeine.newBuilder()
+            // 写入后1天过期，自动清理不使用的锁对象，防止内存泄漏
+            .expireAfterWrite(1, TimeUnit.DAYS)
+            .build();
+
+    /**
+     * Token车票刷新缓存
+     * <p>
+     * 用途：防止短时间内重复刷新token或车票信息，实现防抖功能
+     * <p>
+     * 工作原理：
+     * - Key: 刷新操作的唯一标识（如：用户ID_车次ID）
+     * - Value: 刷新标记或结果对象
+     * - 过期时间：1分钟（写入后1分钟自动清理）
+     * <p>
+     * 使用场景：
+     * - 防止用户频繁点击刷新按钮，导致短时间内多次刷新
+     * - 在刷新操作进行中时，如果再次触发刷新，直接返回缓存的结果
+     * - 实现"防抖"功能：1分钟内只允许刷新一次
+     * <p>
+     * 性能优化：
+     * - 使用Caffeine本地缓存，读写性能极高（纳秒级）
+     * - 相比Redis，本地缓存无网络开销，响应更快
+     * - 过期时间短（1分钟），内存占用小
+     * <p>
+     * 注意事项：
+     * - 这是JVM级别的缓存，不同服务实例之间不共享
+     * - 如果需要跨服务实例共享，应使用Redis缓存
+     * - 过期时间设置为1分钟，平衡了防抖效果和实时性
+     */
+    private final Cache<String, Object> tokenTicketsRefreshMap = Caffeine.newBuilder()
+            // 写入后1分钟过期，实现防抖功能：1分钟内只允许刷新一次
+            .expireAfterWrite(1, TimeUnit.MINUTES)
+            .build();
 
     @Override
     public TicketPageQueryRespDTO pageListTicketQueryV1(TicketPageQueryReqDTO requestParam) {
@@ -703,9 +767,33 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
                 .build();
     }
 
+    @ILog
+    @Idempotent(
+            uniqueKeyPrefix = "index12306-ticket:lock_purchase-tickets:",
+            key = "T(org.openzjl.index12306.framework.starter.bases.ApplicationContextHolder).getBean('environment').getProperty('unique-name','')"
+                    + "+'_'+"
+                    + "T(org.openzjl.index12306.framework.starter.user.core.UserContext).getUserName()",
+            message = "正在执行下单流程，请稍后...",
+            scene = IdempotentSceneEnum.RESTAPI,
+            type = IdempotentTypeEnum.SPEL
+    )
     @Override
     public TicketPurchaseRespDTO purchaseTicketsV1(PurchaseTicketReqDTO requestParam) {
-        return null;
+        /**
+         * 责任链模式
+         * 验证 1: 参数必填
+         * 验证 2: 参数正确性
+         * 验证 3: 乘客是否已经购买当前车次
+         */
+        purchaseTicketAbstractChainContext.handler(TicketChainMarkEnum.TRAIN_PURCHASE_TICKET_FILTER.name(), requestParam);
+        String lockKey = environment.resolvePlaceholders(String.format(LOCK_PURCHASE_TICKETS, requestParam.getTrainId()));
+        RLock lock = redissonClient.getLock(lockKey);
+        lock.lock();
+        try {
+            return ticketService.executePurchaseTickets(requestParam);
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
@@ -714,7 +802,18 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
     }
 
     @Override
+    @Transactional(rollbackFor = Throwable.class)
     public TicketPurchaseRespDTO executePurchaseTickets(PurchaseTicketReqDTO requestParam) {
+        List<TicketOrderDetailRespDTO> ticketOrderDetailResults = new ArrayList<>();
+        String trainId = requestParam.getTrainId();
+        TrainDO trainDO = distributedCache.safeGet(
+                TRAIN_INFO + trainId,
+                TrainDO.class,
+                () -> trainMapper.selectById(trainId),
+                ADVANCE_TICKET_DAY,
+                TimeUnit.DAYS
+        );
+        List<TicketPurchaseRespDTO> trainPurchaseTicketResults = null;
         return null;
     }
 
@@ -893,6 +992,6 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
 
     @Override
     public void run(String... args) throws Exception {
-
+        ticketService = ApplicationContextHolder.getBean(TicketService.class);
     }
 }

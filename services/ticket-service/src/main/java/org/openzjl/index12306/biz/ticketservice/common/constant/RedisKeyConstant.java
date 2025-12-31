@@ -90,4 +90,9 @@ public class RedisKeyConstant {
      * 获取相邻座位余票分布式锁key
      */
     public static final String LOCK_SAFE_LOAD_SEAT_MARGIN_GET = "index12306-ticket-service:lock_safe_load_seat_margin_%s";
+
+    /**
+     * 用户购票分布式锁Key
+     */
+    public static final String LOCK_PURCHASE_TICKETS = "${unique-name:}index12306-ticket-service:lock_purchase_tickets_%s";
 }
