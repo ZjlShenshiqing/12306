@@ -29,7 +29,7 @@ public class TrainPurchaseTicketRespDTO {
     /**
      * 证件号
      */
-    private Integer idCard;
+    private String idCard;
 
     /**
      * 乘车人手机号
@@ -40,6 +40,11 @@ public class TrainPurchaseTicketRespDTO {
      * 车票/用户类型 0：成人 1：儿童 2：学生 3：残疾军人
      */
     private Integer userType;
+
+    /**
+     * 席别类型
+     */
+    private Integer seatType;
 
     /**
      * 车厢号
