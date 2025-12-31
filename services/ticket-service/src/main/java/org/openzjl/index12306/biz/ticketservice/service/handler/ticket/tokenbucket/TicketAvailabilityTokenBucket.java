@@ -14,7 +14,7 @@ import org.openzjl.index12306.biz.ticketservice.dto.domain.SeatTypeCountDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.req.PurchaseTicketPassengerDetailDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.req.PurchaseTicketReqDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.resp.TicketOrderDetailRespDTO;
-import org.openzjl.index12306.biz.ticketservice.enums.VehicleTypeEnum;
+import org.openzjl.index12306.biz.ticketservice.common.enums.VehicleTypeEnum;
 import org.openzjl.index12306.biz.ticketservice.remote.dto.TicketOrderPassengerDetailRespDTO;
 import org.openzjl.index12306.biz.ticketservice.service.SeatService;
 import org.openzjl.index12306.biz.ticketservice.service.TrainStationService;

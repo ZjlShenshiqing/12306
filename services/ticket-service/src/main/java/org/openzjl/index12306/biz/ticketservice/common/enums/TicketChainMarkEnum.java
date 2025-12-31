@@ -1,4 +1,4 @@
-package org.openzjl.index12306.biz.ticketservice.enums;
+package org.openzjl.index12306.biz.ticketservice.common.enums;
 
 /**
  * 购票相关责任链枚举

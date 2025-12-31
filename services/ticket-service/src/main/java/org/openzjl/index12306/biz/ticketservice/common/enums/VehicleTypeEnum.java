@@ -1,4 +1,4 @@
-package org.openzjl.index12306.biz.ticketservice.enums;
+package org.openzjl.index12306.biz.ticketservice.common.enums;
 
 import cn.hutool.core.collection.ListUtil;
 import lombok.Getter;
@@ -8,7 +8,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-import static org.openzjl.index12306.biz.ticketservice.enums.VehicleSeatTypeEnum.*;
+import static org.openzjl.index12306.biz.ticketservice.common.enums.VehicleSeatTypeEnum.*;
 
 /**
  * 交通工具类型

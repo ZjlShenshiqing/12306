@@ -10,7 +10,7 @@ import org.openzjl.index12306.biz.ticketservice.dao.entity.TrainDO;
 import org.openzjl.index12306.biz.ticketservice.dao.mapper.SeatMapper;
 import org.openzjl.index12306.biz.ticketservice.dao.mapper.TrainMapper;
 import org.openzjl.index12306.biz.ticketservice.dto.domain.RouteDTO;
-import org.openzjl.index12306.biz.ticketservice.enums.VehicleTypeEnum;
+import org.openzjl.index12306.biz.ticketservice.common.enums.VehicleTypeEnum;
 import org.openzjl.index12306.biz.ticketservice.service.TrainStationService;
 import org.openzjl.index12306.framework.starter.cache.DistributedCache;
 import org.openzjl.index12306.framework.starter.cache.toolkit.CacheUtil;
