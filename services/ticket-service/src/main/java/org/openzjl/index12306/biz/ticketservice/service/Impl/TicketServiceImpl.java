@@ -12,6 +12,8 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.google.common.collect.Lists;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.openzjl.index12306.biz.ticketservice.common.enums.SourceEnum;
+import org.openzjl.index12306.biz.ticketservice.common.enums.TicketStatusEnum;
 import org.openzjl.index12306.biz.ticketservice.dao.entity.*;
 import org.openzjl.index12306.biz.ticketservice.dao.mapper.*;
 import org.openzjl.index12306.biz.ticketservice.dto.domain.SeatClassDTO;
@@ -28,21 +30,28 @@ import org.openzjl.index12306.biz.ticketservice.dto.resp.RefundTicketRespDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.resp.TicketPageQueryRespDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.resp.TicketPurchaseRespDTO;
 import org.openzjl.index12306.biz.ticketservice.remote.TicketOrderRemoteService;
+import org.openzjl.index12306.biz.ticketservice.remote.dto.TicketOrderCreateRemoteReqDTO;
+import org.openzjl.index12306.biz.ticketservice.remote.dto.TicketOrderItemCreateRemoteReqDTO;
 import org.openzjl.index12306.biz.ticketservice.service.SeatService;
 import org.openzjl.index12306.biz.ticketservice.service.TicketService;
 import org.openzjl.index12306.biz.ticketservice.service.TrainStationService;
 import org.openzjl.index12306.biz.ticketservice.service.cache.SeatMarginCacheLoader;
+import org.openzjl.index12306.biz.ticketservice.service.handler.ticket.dto.TrainPurchaseTicketRespDTO;
+import org.openzjl.index12306.biz.ticketservice.service.handler.ticket.select.TrainSeatTypeSelector;
 import org.openzjl.index12306.biz.ticketservice.service.handler.ticket.tokenbucket.TicketAvailabilityTokenBucket;
 import org.openzjl.index12306.biz.ticketservice.toolkit.DateUtil;
 import org.openzjl.index12306.biz.ticketservice.toolkit.TimeStringComparator;
 import org.openzjl.index12306.framework.starter.bases.ApplicationContextHolder;
 import org.openzjl.index12306.framework.starter.cache.DistributedCache;
 import org.openzjl.index12306.framework.starter.cache.toolkit.CacheUtil;
+import org.openzjl.index12306.framework.starter.convention.exception.ServiceException;
+import org.openzjl.index12306.framework.starter.convention.result.Result;
 import org.openzjl.index12306.framework.starter.designpattern.chain.AbstractChainContext;
 import org.openzjl.index12306.framework.starter.idempotent.annotation.Idempotent;
 import org.openzjl.index12306.framework.starter.idempotent.enums.IdempotentSceneEnum;
 import org.openzjl.index12306.framework.starter.idempotent.enums.IdempotentTypeEnum;
 import org.openzjl.index12306.framework.starter.log.annotation.ILog;
+import org.openzjl.index12306.framework.starter.user.core.UserContext;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Value;
@@ -93,6 +102,7 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
     private final TicketAvailabilityTokenBucket ticketAvailabilityTokenBucket;
     private final SeatMarginCacheLoader seatMarginCacheLoader;
     private final Environment environment;
+    private final TrainSeatTypeSelector trainSeatTypeSelector;
     private TicketService ticketService;
 
     @Value("${ticket.availability.cache-update.type}")
@@ -801,11 +811,48 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
         return null;
     }
 
+    /**
+     * 执行购票核心流程
+     * <p>
+     * 该方法在分布式锁保护下执行，确保同一车次同一用户的购票操作串行化，避免并发冲突。
+     * 使用 {@code @Transactional} 注解确保数据一致性，任何异常都会触发事务回滚。
+     * </p>
+     *
+     * <p>执行流程：</p>
+     * <ol>
+     *     <li>获取车次信息：从缓存或数据库获取车次基本信息。</li>
+     *     <li>选择座位：根据车次类型和乘客信息，选择合适的座位（车厢号、座位号）。</li>
+     *     <li>保存车票记录：将选中的座位信息保存到车票表，状态为"未支付"。</li>
+     *     <li>构建订单项：为每个乘客构建订单项信息（包含价格、座位、乘客信息等）。</li>
+     *     <li>查询站点关系：获取出发站和到达站的时间信息。</li>
+     *     <li>创建订单：调用订单服务创建订单，返回订单号。</li>
+     *     <li>返回结果：封装订单号和车票详情返回给前端。</li>
+     * </ol>
+     *
+     * <p>注意事项：</p>
+     * <ul>
+     *     <li>该方法在事务中执行，任何步骤失败都会回滚所有数据库操作。</li>
+     *     <li>车票状态初始化为"未支付"（{@code TicketStatusEnum.UNPAID}），等待用户支付。</li>
+     *     <li>订单服务调用失败会抛出异常，触发事务回滚，已保存的车票记录会被删除。</li>
+     *     <li>订单号由订单服务生成并返回，车票服务不负责订单号的生成。</li>
+     * </ul>
+     *
+     * @param requestParam 购票请求参数（包含车次ID、出发站、到达站、乘客信息等）
+     * @return 购票响应对象（包含订单号和车票详情列表）
+     * @throws ServiceException 当订单服务调用失败时抛出
+     */
     @Override
     @Transactional(rollbackFor = Throwable.class)
     public TicketPurchaseRespDTO executePurchaseTickets(PurchaseTicketReqDTO requestParam) {
+        // 初始化车票详情结果列表，用于返回给前端展示
         List<TicketOrderDetailRespDTO> ticketOrderDetailResults = new ArrayList<>();
+        
+        // 获取车次ID
         String trainId = requestParam.getTrainId();
+        
+        // 从缓存或数据库获取车次基本信息
+        // 优先从Redis缓存读取，缓存不存在则从数据库查询并写入缓存
+        // 缓存过期时间：ADVANCE_TICKET_DAY 天（提前购票天数）
         TrainDO trainDO = distributedCache.safeGet(
                 TRAIN_INFO + trainId,
                 TrainDO.class,
@@ -813,8 +860,115 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
                 ADVANCE_TICKET_DAY,
                 TimeUnit.DAYS
         );
-        List<TicketPurchaseRespDTO> trainPurchaseTicketResults = null;
-        return null;
+        
+        // 根据车次类型和购票请求，选择合适的座位
+        // 返回每个乘客的座位分配结果（包含车厢号、座位号、价格等信息）
+        List<TrainPurchaseTicketRespDTO> trainPurchaseTicketResults = trainSeatTypeSelector.select(trainDO.getTrainType(), requestParam);
+        
+        // 将座位分配结果转换为车票实体对象列表
+        // 每个车票记录包含：用户名、车次ID、车厢号、座位号、乘客ID、车票状态（未支付）
+        List<TicketDO> ticketList = trainPurchaseTicketResults.stream()
+                .map(each -> TicketDO.builder()
+                        .username(UserContext.getUserName())                                    // 当前登录用户名
+                        .trainId(Long.parseLong(requestParam.getTrainId()))                    // 车次ID
+                        .carriageNumber(each.getCarriageNumber())                                // 车厢号
+                        .seatNumber(each.getSeatNumber())                                        // 座位号
+                        .passengerId(each.getPassengerId())                                     // 乘客ID
+                        .ticketStatus(TicketStatusEnum.UNPAID.getCode())                        // 车票状态：未支付
+                        .build())
+                .toList();
+        
+        // 批量保存车票记录到数据库
+        // 使用MyBatis-Plus的saveBatch方法，批量插入性能更好
+        saveBatch(ticketList);
+        
+        // 订单服务调用结果
+        Result<String> ticketOrderResult;
+        
+        try {
+            // 构建订单项列表（用于调用订单服务）
+            // 每个订单项对应一张车票，包含价格、座位、乘客信息等
+            List<TicketOrderItemCreateRemoteReqDTO> orderItemCreateRemoteReqDTOList = new ArrayList<>();
+            
+            // 遍历座位分配结果，为每个乘客构建订单项和车票详情
+            trainPurchaseTicketResults.forEach(each -> {
+                // 构建订单项
+                // 包含订单服务需要的所有信息：价格、座位、乘客证件、联系方式等
+                TicketOrderItemCreateRemoteReqDTO orderItemCreateRemoteReqDTO = TicketOrderItemCreateRemoteReqDTO.builder()
+                        .amount(each.getAmount())                    // 车票金额（分）
+                        .carriageNumber(each.getCarriageNumber())    // 车厢号
+                        .seatNumber(each.getSeatNumber())            // 座位号
+                        .idCard(each.getIdCard())                    // 身份证号
+                        .idType(each.getIdType())                    // 证件类型
+                        .phone(each.getPhone())                      // 手机号
+                        .seatType(each.getSeatType())                // 座位类型（商务座、一等座等）
+                        .ticketType(each.getUserType())              // 票种（成人票、儿童票等）
+                        .realName(each.getRealName())                // 真实姓名
+                        .build();
+                
+                // 构建车票详情
+                // 包含前端展示需要的车票信息
+                TicketOrderDetailRespDTO ticketOrderDetailRespDTO = TicketOrderDetailRespDTO.builder()
+                        .amount(each.getAmount())                    // 车票金额
+                        .carriageNumber(each.getCarriageNumber())    // 车厢号
+                        .seatNumber(each.getSeatNumber())            // 座位号
+                        .idCard(each.getIdCard())                     // 身份证号
+                        .idType(each.getIdType())                     // 证件类型
+                        .seatType(each.getSeatType())                // 座位类型
+                        .ticketType(each.getUserType())              // 票种
+                        .realName(each.getRealName())                // 真实姓名
+                        .build();
+                
+                // 添加到列表
+                orderItemCreateRemoteReqDTOList.add(orderItemCreateRemoteReqDTO);
+                ticketOrderDetailResults.add(ticketOrderDetailRespDTO);
+            });
+            
+            // 查询列车站点关系信息（获取出发时间和到达时间）
+            // 根据车次ID、出发站、到达站查询站点关系，获取该路段的运行时间信息
+            LambdaQueryWrapper<TrainStationRelationDO> queryWrapper = Wrappers.lambdaQuery(TrainStationRelationDO.class)
+                    .eq(TrainStationRelationDO::getTrainId, trainId)                                    // 车次ID
+                    .eq(TrainStationRelationDO::getDeparture, requestParam.getDeparture())                // 出发站编码
+                    .eq(TrainStationRelationDO::getArrival, requestParam.getArrival());                  // 到达站编码
+            TrainStationRelationDO trainStationRelationDO = trainStationRelationMapper.selectOne(queryWrapper);
+            
+            // 构建订单创建请求DTO（用于远程调用订单服务）
+            // 包含订单的所有信息：出发站、到达站、车次、时间、乘客信息等
+            TicketOrderCreateRemoteReqDTO orderCreateRemoteReqDTO = TicketOrderCreateRemoteReqDTO.builder()
+                    .departure(requestParam.getDeparture())                                          // 出发站编码
+                    .arrival(requestParam.getArrival())                                              // 到达站编码
+                    .orderTime(new Date())                                                           // 下单时间
+                    .source(SourceEnum.INTERNET.getCode())                                           // 订单来源：互联网
+                    .trainNumber(trainDO.getTrainNumber())                                           // 车次号（如：G123）
+                    .departureTime(trainStationRelationDO.getDepartureTime())                        // 出发时间
+                    .arrivalTime(trainStationRelationDO.getArrivalTime())                            // 到达时间
+                    .ridingDate(trainStationRelationDO.getDepartureTime())                            // 乘车日期（使用出发时间）
+                    .userId(UserContext.getUserId())                                                 // 用户ID
+                    .trainId(Long.parseLong(requestParam.getTrainId()))                              // 车次ID
+                    .ticketOrderItems(orderItemCreateRemoteReqDTOList)                                // 订单项列表
+                    .build();
+            
+            // 调用订单服务创建订单
+            // 订单服务会生成订单号并返回，如果创建失败会返回错误信息
+            ticketOrderResult = ticketOrderRemoteService.createTicketOrder(orderCreateRemoteReqDTO);
+            
+            // 校验订单服务调用结果
+            // 如果调用失败或订单号为空，抛出异常触发事务回滚
+            if (!ticketOrderResult.isSuccess() || StrUtil.isBlank(ticketOrderResult.getData())) {
+                log.error("订单服务调用失败，返回结果: {}", ticketOrderResult.getMessage());
+                throw new ServiceException("订单服务调用失败");
+            }
+        } catch (Throwable ex) {
+            // 捕获所有异常（包括订单服务调用异常）
+            // 记录错误日志，然后重新抛出异常，触发事务回滚
+            // 这样已保存的车票记录会被删除，保证数据一致性
+            log.error("远程调用订单服务创建错误，请求参数: {}", JSON.toJSONString(requestParam), ex);
+            throw ex;
+        }
+        
+        // 构建并返回购票响应对象
+        // 包含订单号（由订单服务生成）和车票详情列表（用于前端展示）
+        return new TicketPurchaseRespDTO(ticketOrderResult.getData(), ticketOrderDetailResults);
     }
 
     @Override

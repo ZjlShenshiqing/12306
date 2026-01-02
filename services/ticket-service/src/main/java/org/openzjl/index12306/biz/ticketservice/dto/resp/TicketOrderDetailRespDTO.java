@@ -23,56 +23,42 @@ import java.util.List;
 public class TicketOrderDetailRespDTO {
 
     /**
-     * 订单号
+     * 座位类型
      */
-    private String orderSn;
+    private Integer seatType;
 
     /**
-     * 列车ID
+     * 车厢号
      */
-    private Long trainId;
+    private String carriageNumber;
 
     /**
-     * 出发站
+     * 座位号
      */
-    private String departure;
+    private String seatNumber;
 
     /**
-     * 到达站
+     * 真实姓名
      */
-    private String arrival;
+    private String realName;
 
     /**
-     * 乘车日期
+     * 证件类型
      */
-    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
-    private Date ridingDate;
+    private Integer idType;
 
     /**
-     * 订单时间
+     * 证件号
      */
-    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
-    private Date orderTime;
+    private String idCard;
 
     /**
-     * 列车编号
+     * 车票类型
      */
-    private String trainNumber;
+    private Integer ticketType;
 
     /**
-     * 出发时间
+     * 订单金额
      */
-    @JsonFormat(pattern = "HH:mm", timezone = "GMT+8")
-    private Date departureTime;
-
-    /**
-     * 到达时间
-     */
-    @JsonFormat(pattern = "HH:mm", timezone = "GMT+8")
-    private Date arrivalTime;
-
-    /**
-     * 乘车人订单详情列表
-     */
-    private List<TicketOrderPassengerDetailRespDTO> passengerDetails;
+    private Integer amount;
 }
