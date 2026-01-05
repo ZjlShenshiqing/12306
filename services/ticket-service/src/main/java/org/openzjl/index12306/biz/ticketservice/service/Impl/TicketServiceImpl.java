@@ -17,14 +17,13 @@ import org.openzjl.index12306.biz.ticketservice.common.enums.TicketStatusEnum;
 import org.openzjl.index12306.biz.ticketservice.dao.entity.*;
 import org.openzjl.index12306.biz.ticketservice.dao.mapper.*;
 import org.openzjl.index12306.biz.ticketservice.dto.domain.SeatClassDTO;
+import org.openzjl.index12306.biz.ticketservice.dto.domain.SeatTypeCountDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.domain.TicketListDTO;
-import org.openzjl.index12306.biz.ticketservice.dto.req.CancelTicketOrderReqDTO;
-import org.openzjl.index12306.biz.ticketservice.dto.req.PurchaseTicketReqDTO;
-import org.openzjl.index12306.biz.ticketservice.dto.req.RefundTicketReqDTO;
-import org.openzjl.index12306.biz.ticketservice.dto.req.TicketPageQueryReqDTO;
+import org.openzjl.index12306.biz.ticketservice.dto.req.*;
 import org.openzjl.index12306.biz.ticketservice.dto.resp.TicketOrderDetailRespDTO;
 import org.openzjl.index12306.biz.ticketservice.common.enums.TicketChainMarkEnum;
 import org.openzjl.index12306.biz.ticketservice.common.enums.VehicleTypeEnum;
+import org.openzjl.index12306.biz.ticketservice.remote.PayRemoteService;
 import org.openzjl.index12306.biz.ticketservice.remote.dto.PayInfoRespDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.resp.RefundTicketRespDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.resp.TicketPageQueryRespDTO;
@@ -36,6 +35,7 @@ import org.openzjl.index12306.biz.ticketservice.service.SeatService;
 import org.openzjl.index12306.biz.ticketservice.service.TicketService;
 import org.openzjl.index12306.biz.ticketservice.service.TrainStationService;
 import org.openzjl.index12306.biz.ticketservice.service.cache.SeatMarginCacheLoader;
+import org.openzjl.index12306.biz.ticketservice.service.handler.ticket.dto.TokenResultDTO;
 import org.openzjl.index12306.biz.ticketservice.service.handler.ticket.dto.TrainPurchaseTicketRespDTO;
 import org.openzjl.index12306.biz.ticketservice.service.handler.ticket.select.TrainSeatTypeSelector;
 import org.openzjl.index12306.biz.ticketservice.service.handler.ticket.tokenbucket.TicketAvailabilityTokenBucket;
@@ -66,6 +66,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
@@ -103,7 +105,31 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
     private final SeatMarginCacheLoader seatMarginCacheLoader;
     private final Environment environment;
     private final TrainSeatTypeSelector trainSeatTypeSelector;
+    private final PayRemoteService payRemoteService;
     private TicketService ticketService;
+
+    /**
+     * 令牌桶为空时的异步刷新线程池
+     * <p>
+     * 用途：当令牌桶为空（无票可售）时，异步执行令牌桶刷新任务，从数据库重新加载最新余票并更新令牌桶。
+     * </p>
+     *
+     * <p>为什么使用单线程？</p>
+     * <ul>
+     *     <li>串行执行刷新任务，避免并发刷新导致的数据不一致。</li>
+     *     <li>同一车次的刷新任务按顺序执行，确保令牌桶更新的准确性。</li>
+     *     <li>减少数据库压力，避免多个线程同时查询同一车次的余票。</li>
+     *     <li>单线程足够处理刷新任务，刷新操作本身不耗时（主要是数据库查询）。</li>
+     * </ul>
+     *
+     * <p>使用场景：</p>
+     * <ul>
+     *     <li>延迟刷新：当令牌桶为空时，不立即刷新，而是延迟一段时间后异步刷新。</li>
+     *     <li>定时刷新：定期检查并刷新令牌桶，确保数据实时性。</li>
+     *     <li>批量刷新：将多个车次的刷新任务放入队列，统一处理。</li>
+     * </ul>
+     */
+    private final ScheduledExecutorService tokenIsNullRefreshExecutor = Executors.newScheduledThreadPool(1);
 
     @Value("${ticket.availability.cache-update.type}")
     private String ticketAvailabilityCacheUpdateType;
@@ -806,9 +832,178 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
         }
     }
 
+    @ILog
+    @Idempotent(
+            uniqueKeyPrefix = "index12306-ticket:lock_purchase-tickets:",
+            key = "T(org.openzjl.index12306.framework.starter.bases.ApplicationContextHolder).getBean('environment').getProperty('unique-name','')"
+                    + "+'_'+"
+                    + "T(org.openzjl.index12306.framework.starter.user.core.UserContext).getUserName()",
+            message = "正在执行下单流程，请稍后...",
+            scene = IdempotentSceneEnum.RESTAPI,
+            type = IdempotentTypeEnum.SPEL
+    )
+    /**
+     * 购票接口 V2 版本（基于令牌桶限流 + 双重锁机制）。
+     * <p>
+     * 相比 V1 版本，V2 版本引入了以下优化：
+     * </p>
+     * <ul>
+     *     <li>令牌桶限流：控制购票并发，避免超卖。</li>
+     *     <li>按座位类型加锁：不同座位类型的购票操作可以并行，提高并发性能。</li>
+     *     <li>本地锁 + 分布式锁：双重锁机制，本地锁减少网络开销，分布式锁保证跨服务实例的同步。</li>
+     *     <li>令牌桶刷新机制：当令牌桶为空时，延迟刷新并验证数据准确性。</li>
+     * </ul>
+     *
+     * <p>执行流程：</p>
+     * <ol>
+     *     <li>责任链校验：参数校验、权限校验等。</li>
+     *     <li>令牌桶限流：从令牌桶获取令牌，控制购票并发。</li>
+     *     <li>令牌桶刷新：如果令牌桶为空，触发刷新机制（防抖 + 双重检查锁定）。</li>
+     *     <li>按座位类型分组：将乘客按座位类型分组，不同座位类型可以并行处理。</li>
+     *     <li>获取锁：为每个座位类型获取本地锁和分布式锁。</li>
+     *     <li>执行购票：在锁保护下执行购票核心流程。</li>
+     *     <li>释放锁：无论成功与否，都要释放所有锁。</li>
+     * </ol>
+     *
+     * @param requestParam 购票请求参数（包含车次ID、出发站、到达站、乘客信息等）
+     * @return 购票响应对象（包含订单号和车票详情列表）
+     * @throws ServiceException 当令牌桶为空且已刷新过时抛出
+     */
     @Override
     public TicketPurchaseRespDTO purchaseTicketsV2(PurchaseTicketReqDTO requestParam) {
-        return null;
+        // 责任链校验
+        // 执行购票前置校验（参数校验、权限校验、乘客是否已购票等）
+        // 确保请求合法后再继续后续流程
+        purchaseTicketAbstractChainContext.handler(TicketChainMarkEnum.TRAIN_PURCHASE_TICKET_FILTER.name(), requestParam);
+        
+        // 从令牌桶获取令牌（限流控制）
+        // 令牌桶机制：控制购票并发，避免超卖
+        // - 如果令牌桶中有令牌，返回令牌，允许购票
+        // - 如果令牌桶为空，返回 null，表示当前无票可售
+        TokenResultDTO tokenResult = ticketAvailabilityTokenBucket.takeTokenFromBucket(requestParam);
+        
+        // 令牌桶为空时的处理（刷新机制 + 防抖 + 双重检查锁定）
+        // 如果获取不到令牌（令牌桶为空），说明该车次当前无票
+        // 此时需要检查是否需要刷新令牌桶（从数据库重新加载余票并更新令牌桶）
+        if (tokenResult.getTokenIsNull()) {
+            // 第一次检查：快速路径（无锁检查）
+            // 检查本地缓存中是否有该车次的刷新标记
+            // tokenTicketsRefreshMap 是防抖缓存，1分钟内只允许刷新一次
+            // - 如果返回 null：说明最近1分钟内没有刷新过，可能需要触发刷新
+            // - 如果返回非 null：说明最近1分钟内已经刷新过，避免重复刷新（防抖）
+            Object ifPresentObj = tokenTicketsRefreshMap.getIfPresent(requestParam.getTrainId());
+            
+            // 如果没有刷新标记，说明可以尝试触发刷新
+            if (ifPresentObj == null) {
+                // 双重检查锁定（Double-Check Locking）模式
+                // 使用 synchronized 确保同一时刻只有一个线程能执行刷新逻辑
+                // 锁对象：TicketService.class（类级别的锁，确保所有实例共享同一把锁）
+                synchronized (TicketService.class) {
+                    // 加锁后再次检查
+                    // 获取锁后再次检查缓存，可能其他线程已经写入标记了
+                    // 这是双重检查锁定的核心：确保即使多个线程同时通过第一次检查，也只有一个线程执行刷新
+                    if (tokenTicketsRefreshMap.getIfPresent(requestParam.getTrainId()) == null) {
+                        // 创建刷新标记对象（可以是任意对象，这里使用 new Object()）
+                        // 这个对象本身不重要，重要的是它的存在表示"正在刷新或已刷新过"
+                        ifPresentObj = new Object();
+                        
+                        // 写入缓存标记，有效期1分钟
+                        // 这样后续1分钟内的请求都会发现已有标记，不会重复刷新
+                        tokenTicketsRefreshMap.put(requestParam.getTrainId(), ifPresentObj);
+                        
+                        // 触发令牌桶刷新任务（延迟10秒执行，异步刷新）
+                        // 这个方法会从数据库查询最新余票，并更新令牌桶
+                        tokenIsNullRefreshToken(requestParam, tokenResult);
+                    }
+                    // 如果第二次检查发现已有标记，说明其他线程已经触发刷新，当前线程直接返回
+                }
+            }
+            // 如果第一次检查发现已有标记，说明最近1分钟内已刷新过，并且没有余票，直接报错
+            throw new ServiceException("列车站点已无余票");
+        }
+        
+        // 按座位类型分组乘客
+        // 初始化锁列表，用于存储所有需要获取的锁
+        List<ReentrantLock> localLockList = new ArrayList<>();      // 本地锁列表（JVM内锁）
+        List<RLock> distributedLockList = new ArrayList<>();        // 分布式锁列表（跨服务实例锁）
+        
+        // 将乘客按座位类型分组
+        // 例如：3个乘客，2个要商务座(0)，1个要一等座(1)
+        // 结果：{0: [乘客1, 乘客2], 1: [乘客3]}
+        // 这样不同座位类型的购票操作可以并行处理，提高并发性能
+        Map<Integer, List<PurchaseTicketPassengerDetailDTO>> seatTypeMap = requestParam.getPassengers().stream()
+                .collect(Collectors.groupingBy(PurchaseTicketPassengerDetailDTO::getSeatType));
+        
+        // 为每个座位类型获取锁
+        // 遍历每个座位类型，为每个类型获取本地锁和分布式锁
+        seatTypeMap.forEach((seatType, passengerList) -> {
+            // 构建锁的key：车次ID_座位类型
+            // 例如：LOCK_PURCHASE_TICKETS_V2 = "index12306-ticket-service:lock_purchase-tickets-v2:%s_%s"
+            // 结果：index12306-ticket-service:lock_purchase-tickets-v2:G123_0（G123次商务座）
+            String lockKey = environment.resolvePlaceholders(String.format(LOCK_PURCHASE_TICKETS_V2, requestParam.getTrainId(), seatType));
+            
+            // 获取或创建本地锁（JVM内锁）
+            // 本地锁用于单个服务实例内的线程同步，性能更好（无网络开销）
+            ReentrantLock localLock = localLockMap.getIfPresent(lockKey);
+            if (localLock == null) {
+                // 双重检查锁定：确保同一时刻只有一个线程创建锁对象
+                synchronized (TicketService.class) {
+                    // 再次检查，可能其他线程已经创建了
+                    if ((localLock = localLockMap.getIfPresent(lockKey)) == null) {
+                        // 创建公平锁（fair lock），按请求顺序获取锁，避免线程饥饿
+                        // true 表示公平锁，false 表示非公平锁
+                        localLock = new ReentrantLock(true);
+                        // 存入缓存，1天后自动过期
+                        localLockMap.put(lockKey, localLock);
+                    }
+                }
+            }
+            // 添加到本地锁列表
+            localLockList.add(localLock);
+            
+            // 获取分布式锁（跨服务实例锁）
+            // 使用公平锁（FairLock），按请求顺序获取锁，避免某些服务实例一直获取不到锁
+            // 分布式锁用于跨服务实例的同步，确保多个服务实例之间不会同时处理同一车次同一座位类型的购票
+            RLock distributedLock = redissonClient.getFairLock(lockKey);
+            distributedLockList.add(distributedLock);
+        });
+        
+        // 加锁并执行购票
+        try {
+            // 先获取所有本地锁（按顺序获取，避免死锁）
+            // 本地锁获取速度快（无网络开销），先获取本地锁可以减少等待时间
+            localLockList.forEach(ReentrantLock::lock);
+            
+            // 再获取所有分布式锁（按顺序获取，避免死锁）
+            // 分布式锁需要网络通信，耗时较长（1-5ms），但能保证跨服务实例的同步
+            distributedLockList.forEach(RLock::lock);
+            
+            // 在锁保护下执行购票核心流程
+            // 此时已经获取了所有必要的锁，可以安全地执行购票操作
+            return ticketService.executePurchaseTickets(requestParam);
+        } finally {
+            // 释放所有锁
+            // 无论购票成功与否，都要释放所有锁，避免死锁
+            // 使用 try-catch 确保即使释放锁时出现异常，也不会影响其他锁的释放
+            
+            // 释放所有本地锁（按顺序释放）
+            localLockList.forEach(localLock -> {
+                try {
+                    localLock.unlock();
+                } catch (Throwable ignored) {
+                    // 忽略释放锁时的异常，确保其他锁能正常释放
+                }
+            });
+
+            // 释放所有分布式锁（按顺序释放）
+            distributedLockList.forEach(distributedLock -> {
+                try {
+                    distributedLock.unlock();
+                } catch (Throwable ignored) {
+                    // 忽略释放锁时的异常，确保其他锁能正常释放
+                }
+            });
+        }
     }
 
     /**
@@ -973,7 +1168,7 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
 
     @Override
     public PayInfoRespDTO getPayInfo(String orderSn) {
-        return null;
+        return payRemoteService.getPayInfo(orderSn).getData();
     }
 
     @Override
@@ -1140,8 +1335,110 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
         }
         
         // 将HashSet转换为List返回
-        // 使用Java 9+的stream().toList()方法（不可变List）
         return trainBrandSet.stream().toList();
+    }
+
+    /**
+     * 令牌桶为空时的延迟刷新和验证机制。
+     * <p>
+     * 当令牌桶为空（无票可售）时，不立即刷新，而是延迟10秒后异步执行刷新任务。
+     * 在刷新过程中，会验证令牌桶中的数据是否准确，如果发现令牌数量与实际余票不匹配，会进行修正。
+     * </p>
+     *
+     * <p>执行流程：</p>
+     * <ol>
+     *     <li>获取分布式锁：确保同一车次只有一个线程执行刷新任务。</li>
+     *     <li>延迟执行：延迟10秒后执行刷新，避免频繁刷新造成数据库压力。</li>
+     *     <li>解析令牌信息：从 {@code tokenResult} 中解析出哪些座位类型的令牌为空，以及对应的令牌数量。</li>
+     *     <li>查询实际余票：从数据库查询该车次路线的实际余票数量。</li>
+     *     <li>数据校验：比较令牌数量与实际余票数量，如果令牌数量 <= 实际余票，说明令牌桶数据准确，删除多余的令牌。</li>
+     *     <li>释放锁：无论成功与否，都要释放分布式锁。</li>
+     * </ol>
+     *
+     * <p>为什么延迟10秒？</p>
+     * <ul>
+     *     <li>避免频繁刷新：如果令牌桶刚为空就立即刷新，可能短时间内多次刷新，造成数据库压力。</li>
+     *     <li>等待其他操作完成：给其他可能的购票操作留出时间，避免不必要的刷新。</li>
+     *     <li>批量处理：延迟执行可以将多个刷新请求合并处理，提高效率。</li>
+     * </ul>
+     *
+     *
+     * <p>校验逻辑：</p>
+     * <ul>
+     *     <li>如果令牌数量 <= 实际余票数量：说明令牌桶数据准确或偏少，删除多余的令牌（可能是之前残留的）。</li>
+     *     <li>如果令牌数量 > 实际余票数量：说明令牌桶数据不准确，需要补充令牌（但当前代码中未实现）。</li>
+     * </ul>
+     *
+     * @param requestParam 购票请求参数（包含车次ID、出发站、到达站等）
+     * @param tokenResult  令牌获取结果（包含令牌为空的座位类型和数量信息）
+     */
+    private void tokenIsNullRefreshToken(PurchaseTicketReqDTO requestParam, TokenResultDTO tokenResult) {
+        // 获取分布式锁
+        // 基于车次ID构建锁的key，确保同一车次只有一个线程执行刷新任务
+        // 防止多个线程同时刷新同一车次的令牌桶，造成数据不一致
+        RLock lock = redissonClient.getLock(String.format(LOCK_TOKEN_BUCKET_ISNULL, requestParam.getTrainId()));
+        
+        // 尝试获取锁，如果获取不到（说明其他线程正在刷新），直接返回
+        // 使用 tryLock() 非阻塞方式，避免线程等待
+        if (!lock.tryLock()) {
+            return;
+        }
+        
+        // 延迟执行刷新任务
+        // 延迟10秒后执行刷新任务，避免频繁刷新造成数据库压力
+        // 使用异步线程池执行，不阻塞当前请求线程
+        tokenIsNullRefreshExecutor.schedule(() -> {
+            try {
+                // 解析令牌为空的信息
+                // 初始化座位类型列表和令牌数量映射
+                List<Integer> seatTypes = new ArrayList<>();                    // 存储座位类型列表（如：[0, 1, 2]）
+                Map<Integer, Integer> tokenCountMap = new HashMap<>();          // 存储座位类型 -> 令牌数量的映射
+                
+                // 解析 tokenResult 中的令牌为空信息
+                // 格式：["0_5", "1_10"] 表示商务座(0)有5个令牌为空，一等座(1)有10个令牌为空
+                tokenResult.getTokenIsNullSeatTypeCounts().stream()
+                        // 按 "_" 分割字符串，得到 [座位类型, 令牌数量]
+                        .map(each -> each.split("_"))
+                        .forEach(split -> {
+                            // 解析座位类型（如："0" -> 0）
+                            int seatType = Integer.parseInt(split[0]);
+                            seatTypes.add(seatType);
+                            // 解析令牌数量（如："5" -> 5），并存储到Map中
+                            tokenCountMap.put(seatType, Integer.parseInt(split[1]));
+                        });
+                
+                // 从数据库查询实际余票数量
+                // 查询该车次路线各座位类型的实际余票数量
+                List<SeatTypeCountDTO> seatTypeCountDTOList = seatService.listAvailableSeatTypeCount(
+                        Long.parseLong(requestParam.getTrainId()), 
+                        requestParam.getDeparture(), 
+                        requestParam.getArrival(), 
+                        seatTypes
+                );
+                
+                // 数据校验和修正
+                // 遍历每个座位类型的实际余票数据
+                for (SeatTypeCountDTO each : seatTypeCountDTOList) {
+                    // 获取该座位类型在令牌桶中的令牌数量
+                    Integer tokenCount = tokenCountMap.get(each.getSeatType());
+                    
+                    // 如果令牌数量 <= 实际余票数量，说明令牌桶数据准确或偏少
+                    // 此时删除多余的令牌（可能是之前残留的无效令牌）
+                    if (tokenCount <= each.getSeatCount()) {
+                        // 删除令牌桶中的令牌（修正数据）
+                        ticketAvailabilityTokenBucket.delTokenInBucket(requestParam);
+                        // 找到一个符合条件的座位类型后，跳出循环
+                        break;
+                    }
+                    // 如果令牌数量 > 实际余票数量，说明令牌桶数据不准确（令牌数量偏少）
+                    // 理论上应该补充令牌，但当前代码中未实现此逻辑
+                }
+            } finally {
+                // 释放分布式锁
+                // 无论任务执行成功与否，都要释放锁，避免死锁
+                lock.unlock();
+            }
+        }, 10, TimeUnit.SECONDS);  // 延迟10秒执行
     }
 
     @Override

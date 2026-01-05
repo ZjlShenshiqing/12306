@@ -95,4 +95,14 @@ public class RedisKeyConstant {
      * 用户购票分布式锁Key
      */
     public static final String LOCK_PURCHASE_TICKETS = "${unique-name:}index12306-ticket-service:lock_purchase_tickets_%s";
+
+    /**
+     * 令牌获取失败分布式锁 key
+     */
+    public static final String LOCK_TOKEN_BUCKET_ISNULL = "index12306-ticket-service:lock_token_bucket_is_null:%s";
+
+    /**
+     * 用户购票分布式锁 V2版本
+     */
+    public static final String LOCK_PURCHASE_TICKETS_V2 = "${unique-name:}index12306-ticket-service:lock_purchase_tickets_%s_%d";
 }
