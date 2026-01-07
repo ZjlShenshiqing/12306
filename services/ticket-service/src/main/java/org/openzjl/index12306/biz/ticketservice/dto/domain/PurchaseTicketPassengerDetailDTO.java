@@ -1,4 +1,4 @@
-package org.openzjl.index12306.biz.ticketservice.dto.req;
+package org.openzjl.index12306.biz.ticketservice.dto.domain;
 
 import lombok.Data;
 

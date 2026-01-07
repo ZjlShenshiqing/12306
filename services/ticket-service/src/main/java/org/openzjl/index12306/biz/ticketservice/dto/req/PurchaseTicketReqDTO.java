@@ -1,6 +1,7 @@
 package org.openzjl.index12306.biz.ticketservice.dto.req;
 
 import lombok.Data;
+import org.openzjl.index12306.biz.ticketservice.dto.domain.PurchaseTicketPassengerDetailDTO;
 
 import java.util.List;
 

@@ -6,7 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.openzjl.index12306.biz.ticketservice.dto.req.PurchaseTicketPassengerDetailDTO;
+import org.openzjl.index12306.biz.ticketservice.dto.domain.PurchaseTicketPassengerDetailDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.req.PurchaseTicketReqDTO;
 
 /**

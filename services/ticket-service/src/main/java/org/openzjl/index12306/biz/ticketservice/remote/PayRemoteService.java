@@ -29,5 +29,7 @@ public interface PayRemoteService {
      * 公共退款接口
      */
     @PostMapping("/api/pay-service/common/refund")
-    Result<RefundRespDTO> refund(@RequestBody RefundReqDTO requestParam);
+    Result<RefundRespDTO> commonRefund(@RequestBody RefundReqDTO requestParam);
+
+
 }

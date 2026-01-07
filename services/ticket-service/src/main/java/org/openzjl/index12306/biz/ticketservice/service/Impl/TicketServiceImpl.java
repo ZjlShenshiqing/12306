@@ -1,6 +1,7 @@
 package org.openzjl.index12306.biz.ticketservice.service.Impl;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.StrUtil;
 import com.alibaba.fastjson.JSON;
@@ -12,25 +13,18 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.google.common.collect.Lists;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.openzjl.index12306.biz.ticketservice.common.enums.SourceEnum;
-import org.openzjl.index12306.biz.ticketservice.common.enums.TicketStatusEnum;
+import org.openzjl.index12306.biz.ticketservice.common.enums.*;
 import org.openzjl.index12306.biz.ticketservice.dao.entity.*;
 import org.openzjl.index12306.biz.ticketservice.dao.mapper.*;
-import org.openzjl.index12306.biz.ticketservice.dto.domain.SeatClassDTO;
-import org.openzjl.index12306.biz.ticketservice.dto.domain.SeatTypeCountDTO;
-import org.openzjl.index12306.biz.ticketservice.dto.domain.TicketListDTO;
+import org.openzjl.index12306.biz.ticketservice.dto.domain.*;
 import org.openzjl.index12306.biz.ticketservice.dto.req.*;
 import org.openzjl.index12306.biz.ticketservice.dto.resp.TicketOrderDetailRespDTO;
-import org.openzjl.index12306.biz.ticketservice.common.enums.TicketChainMarkEnum;
-import org.openzjl.index12306.biz.ticketservice.common.enums.VehicleTypeEnum;
 import org.openzjl.index12306.biz.ticketservice.remote.PayRemoteService;
-import org.openzjl.index12306.biz.ticketservice.remote.dto.PayInfoRespDTO;
+import org.openzjl.index12306.biz.ticketservice.remote.dto.*;
 import org.openzjl.index12306.biz.ticketservice.dto.resp.RefundTicketRespDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.resp.TicketPageQueryRespDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.resp.TicketPurchaseRespDTO;
 import org.openzjl.index12306.biz.ticketservice.remote.TicketOrderRemoteService;
-import org.openzjl.index12306.biz.ticketservice.remote.dto.TicketOrderCreateRemoteReqDTO;
-import org.openzjl.index12306.biz.ticketservice.remote.dto.TicketOrderItemCreateRemoteReqDTO;
 import org.openzjl.index12306.biz.ticketservice.service.SeatService;
 import org.openzjl.index12306.biz.ticketservice.service.TicketService;
 import org.openzjl.index12306.biz.ticketservice.service.TrainStationService;
@@ -51,6 +45,7 @@ import org.openzjl.index12306.framework.starter.idempotent.annotation.Idempotent
 import org.openzjl.index12306.framework.starter.idempotent.enums.IdempotentSceneEnum;
 import org.openzjl.index12306.framework.starter.idempotent.enums.IdempotentTypeEnum;
 import org.openzjl.index12306.framework.starter.log.annotation.ILog;
+import org.openzjl.index12306.framework.starter.log.toolkit.BeanUtil;
 import org.openzjl.index12306.framework.starter.user.core.UserContext;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
@@ -1171,13 +1166,243 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
         return payRemoteService.getPayInfo(orderSn).getData();
     }
 
+    /**
+     * 取消订单并回滚
+     * <p>
+     * 当用户取消订单时，需要将已占用的座位资源释放，并更新相关的缓存和令牌桶。
+     * 该方法会依次回滚数据库座位状态、令牌桶、Redis 缓存中的余票信息。
+     * </p>
+     *
+     * <p>执行流程：</p>
+     * <ol>
+     *     <li>调用订单服务取消订单：更新订单状态为已取消。</li>
+     *     <li>判断是否需要回滚：如果取消成功且缓存更新类型不是 binlog，则执行回滚。</li>
+     *     <li>查询订单详情：获取订单的车次、站点、乘客等信息。</li>
+     *     <li>回滚数据库座位状态：释放已占用的座位，更新座位表状态。</li>
+     *     <li>回滚令牌桶：将已取出的令牌归还到令牌桶中。</li>
+     *     <li>回滚 Redis 缓存：更新 Redis 中各个路段的余票数量。</li>
+     * </ol>
+     *
+     * <p>注意事项：</p>
+     * <ul>
+     *     <li>数据库回滚失败会抛出异常，中断后续操作。</li>
+     *     <li>Redis 缓存回滚失败只记录日志，不中断流程（因为数据库已回滚，数据一致性已保证）。</li>
+     *     <li>如果缓存更新类型为 binlog，则不需要手动回滚（由 binlog 监听器自动处理）。</li>
+     * </ul>
+     *
+     * @param requestParam 取消订单请求参数（包含订单号等）
+     */
+    @ILog
     @Override
     public void cancelTicketOrder(CancelTicketOrderReqDTO requestParam) {
-
+        // 调用订单服务取消订单
+        // 更新订单状态为已取消，如果取消失败则直接返回，不执行后续回滚操作
+        Result<Void> cancelOrderResult = ticketOrderRemoteService.cancelTicketOrder(requestParam);
+        
+        // 判断是否需要手动回滚
+        // 条件1：订单取消成功
+        // 条件2：缓存更新类型不是 binlog（如果是 binlog，则由 binlog 监听器自动处理，无需手动回滚）
+        if (cancelOrderResult.isSuccess() && !StrUtil.equals(ticketAvailabilityCacheUpdateType, "binlog")) {
+            // 查询订单详情
+            // 获取订单的详细信息，包括车次ID、出发站、到达站、乘客信息等
+            // 这些信息用于后续的回滚操作
+            Result<org.openzjl.index12306.biz.ticketservice.remote.dto.TicketOrderDetailRespDTO> ticketOrderDetailResult = ticketOrderRemoteService.queryTicketOrderByOrderSn(requestParam.getOrderSn());
+            org.openzjl.index12306.biz.ticketservice.remote.dto.TicketOrderDetailRespDTO ticketOrderDetail = ticketOrderDetailResult.getData();
+            
+            // 提取订单基本信息
+            String trainId = String.valueOf(ticketOrderDetail.getTrainId());           // 车次ID
+            String departure = String.valueOf(ticketOrderDetail.getDeparture());       // 出发站编码
+            String arrival = String.valueOf(ticketOrderDetail.getArrival());          // 到达站编码
+            List<TicketOrderPassengerDetailRespDTO> trainPurchaseTicketResults = ticketOrderDetail.getPassengerDetails();  // 乘客详情列表
+            
+            // 回滚数据库座位状态
+            // 释放已占用的座位，更新座位表的状态（从未占用 -> 可用）
+            // 如果回滚失败，抛出异常中断后续操作（保证数据一致性）
+            try {
+                // 将订单乘客详情转换为购票响应DTO，用于释放座位
+                seatService.unLock(trainId, departure, arrival, BeanUtil.convert(trainPurchaseTicketResults, TrainPurchaseTicketRespDTO.class));
+            } catch (Throwable ex) {
+                log.error("[取消订单] 订单号：{} 回滚列车DB状态失败", requestParam.getOrderSn(), ex);
+                throw ex;
+            }
+            
+            // 回滚令牌桶
+            // 将已取出的令牌归还到令牌桶中，增加可售车票数量
+            ticketAvailabilityTokenBucket.rollbackInBucket(ticketOrderDetail);
+            
+            // 回滚 Redis 缓存中的余票数量
+            // 更新 Redis Hash 中各个路段的余票数量
+            // 注意：这里只记录日志，不抛出异常，因为数据库已回滚，数据一致性已保证
+            try {
+                // 获取 Redis 操作模板
+                StringRedisTemplate stringRedisTemplate = (StringRedisTemplate) distributedCache.getInstance();
+                
+                // 按座位类型分组乘客
+                // 例如：3个乘客，2个商务座(0)，1个一等座(1)
+                // 结果：{0: [乘客1, 乘客2], 1: [乘客3]}
+                Map<Integer, List<TicketOrderPassengerDetailRespDTO>> seatTypeMap = trainPurchaseTicketResults.stream()
+                        .collect(Collectors.groupingBy(TicketOrderPassengerDetailRespDTO::getSeatType));
+                
+                // 查询该车次从出发站到到达站的所有路段
+                // 例如：G123次，北京(1001) -> 上海(2001)
+                // 可能包含多个路段：北京->天津、天津->济南、济南->上海
+                List<RouteDTO> routeDTOList = trainStationService.listTakeoutTrainStationRoute(trainId, departure, arrival);
+                
+                // 遍历每个路段，更新该路段的余票数量
+                routeDTOList.forEach(each -> {
+                    // 构建 Redis Hash Key 的后缀：车次ID_出发站_到达站
+                    // 例如：G123_1001_2001（G123次从北京到上海）
+                    String keySuffix = StrUtil.join("_", trainId, each.getStartStation(), each.getEndStation());
+                    
+                    // 遍历每个座位类型，增加该路段的余票数量
+                    seatTypeMap.forEach((seatType, ticketOrderPassengerDetailRespDTOList) -> {
+                        // 使用 HINCRBY 命令增加 Hash 字段的值
+                        // Key: TRAIN_STATION_REMAINING_TICKET + keySuffix
+                        // Field: 座位类型（如："0" 表示商务座）
+                        // Increment: 乘客数量（取消几张票就增加几张）
+                        // 例如：HINCRBY "train_station_remaining_ticket:G123_1001_2001" "0" 2
+                        // 表示：G123次北京到上海路段的商务座余票增加2张
+                        stringRedisTemplate.opsForHash()
+                                .increment(TRAIN_STATION_REMAINING_TICKET + keySuffix, String.valueOf(seatType), ticketOrderPassengerDetailRespDTOList.size());
+                    });
+                });
+            } catch (Throwable ex) {
+                // Redis 缓存回滚失败只记录日志，不抛出异常
+                // 因为数据库已回滚，数据一致性已保证，缓存可以后续通过其他方式修复
+                log.error("[取消关闭订单] 订单号：{} 回滚列车Cache余票失败", requestParam.getOrderSn(), ex);
+            }
+        }
     }
 
+    /**
+     * 车票退票接口（支持全量退票和部分退票）
+     * <p>
+     * 当用户申请退票时，需要根据退票类型（全量/部分）处理不同的逻辑：
+     * </p>
+     * <ul>
+     *     <li>全量退票：退掉订单中的所有车票。</li>
+     *     <li>部分退票：只退掉订单中指定的部分车票（通过订单项ID列表指定）。</li>
+     * </ul>
+     *
+     * <p>执行流程：</p>
+     * <ol>
+     *     <li>责任链校验：参数校验、权限校验等。</li>
+     *     <li>查询订单详情：获取订单的完整信息，包括所有乘客详情。</li>
+     *     <li>校验订单和乘客信息：确保订单存在且包含乘客信息。</li>
+     *     <li>判断退票类型：如果是部分退票，需要查询指定的订单项信息。</li>
+     *     <li>构建退票请求：封装退票所需的信息。</li>
+     *     <li>调用支付服务退款：执行实际的退款操作。</li>
+     *     <li>回滚相关资源：释放座位、更新缓存等。</li>
+     * </ol>
+     *
+     * @param requestParam 退票请求参数（包含订单号、退票类型、部分退票时的订单项ID列表等）
+     * @return 退票响应对象（包含退款金额、退票状态等）
+     * @throws ServiceException 当订单不存在或订单项不存在时抛出
+     */
     @Override
     public RefundTicketRespDTO commonTicketRefund(RefundTicketReqDTO requestParam) {
+        // 责任链校验
+        // 执行退票前置校验（参数校验、权限校验、订单状态校验等）
+        // 确保请求合法后再继续后续流程
+        refundTicketAbstractChainContext.handler(TicketChainMarkEnum.TRAIN_REFUND_TICKET_FILTER.name(), requestParam);
+        
+        // 查询订单详情
+        // 根据订单号查询订单的完整信息，包括车次、站点、乘客详情等
+        // 这些信息用于后续的退票处理
+        Result<org.openzjl.index12306.biz.ticketservice.remote.dto.TicketOrderDetailRespDTO> orderDetailRespDTOResult = 
+                ticketOrderRemoteService.queryTicketOrderByOrderSn(requestParam.getOrderSn());
+        
+        // 校验订单是否存在
+        // 如果查询失败或订单不存在，抛出异常
+        if (!orderDetailRespDTOResult.isSuccess() || Objects.isNull(orderDetailRespDTOResult.getData())) {
+            throw new ServiceException("车票订单不存在");
+        }
+        
+        // 获取订单详情对象
+        org.openzjl.index12306.biz.ticketservice.remote.dto.TicketOrderDetailRespDTO orderDetailResp = orderDetailRespDTOResult.getData();
+        
+        // 校验订单项（乘客信息）是否存在
+        // 获取订单中的所有乘客详情（每个乘客对应一个订单项）
+        List<TicketOrderPassengerDetailRespDTO> passengerDetails = orderDetailResp.getPassengerDetails();
+        
+        // 如果乘客列表为空，说明订单中没有车票，无法退票
+        if (CollectionUtil.isEmpty(passengerDetails)) {
+            throw new ServiceException("车票子订单不存在");
+        }
+        
+        // 构建退票请求对象
+        // 初始化退票请求DTO，用于后续调用支付服务退款
+        RefundReqDTO refundReqDTO = new RefundReqDTO();
+        
+        // 判断退票类型并处理
+        // 根据退票类型（全量/部分）执行不同的处理逻辑
+        if (RefundTypeEnum.PARTIAL_REFUND.getType().equals(requestParam.getType())) {
+            // 部分退票：只退掉订单中指定的部分车票
+            
+            // 构建订单项查询请求
+            // 用于查询用户指定的要退票的订单项详情
+            TicketOrderItemQueryReqDTO ticketOrderItemQueryReqDTO = new TicketOrderItemQueryReqDTO();
+            ticketOrderItemQueryReqDTO.setOrderSn(requestParam.getOrderSn());                                    // 订单号
+            ticketOrderItemQueryReqDTO.setOrderItemRecordIds(requestParam.getSubOrderRecordIdReqList());        // 订单项ID列表（要退票的订单项）
+            
+            // 调用订单服务查询指定的订单项详情
+            Result<List<TicketOrderPassengerDetailRespDTO>> queryTicketItemOrderById = 
+                    ticketOrderRemoteService.queryTicketItemOrderById(ticketOrderItemQueryReqDTO);
+
+            // 从订单详情中过滤出需要退票的乘客信息
+            // 根据查询到的订单项详情，筛选出对应的乘客信息
+            // 例如：订单有5个乘客，用户只想退其中2个乘客的票，这里就筛选出这2个乘客的信息
+            List<TicketOrderPassengerDetailRespDTO> partialRefundPassengerDetails = passengerDetails.stream()
+                    // 判断当前乘客是否在查询结果中（即是否在退票列表中）
+                    .filter(item -> queryTicketItemOrderById.getData().contains(item))
+                    .collect(Collectors.toList());
+            
+            // 设置退票类型为部分退票
+            refundReqDTO.setRefundTypeEnum(RefundTypeEnum.PARTIAL_REFUND);
+            // 设置需要退票的乘客详情列表（只包含部分乘客）
+            refundReqDTO.setRefundDetailReqDTOList(partialRefundPassengerDetails);
+        } else if (RefundTypeEnum.FULL_REFUND.getType().equals(requestParam.getType())) {
+            // 全量退票处理
+            // 全量退票：退掉订单中的所有车票
+            
+            // 设置退票类型为全量退票
+            refundReqDTO.setRefundTypeEnum(RefundTypeEnum.FULL_REFUND);
+            // 设置需要退票的乘客详情列表（包含所有乘客）
+            refundReqDTO.setRefundDetailReqDTOList(passengerDetails);
+        }
+        
+        // 计算退款金额
+        if (CollectionUtil.isNotEmpty(passengerDetails)) {
+            // 计算退款金额：将所有退票乘客的金额相加
+            // 例如：乘客1的票100元，乘客2的票200元，总退款金额 = 300元
+            Integer partialRefundAmount = passengerDetails.stream()
+                    // 提取每个乘客的金额（单位：分）
+                    .mapToInt(TicketOrderPassengerDetailRespDTO::getAmount)
+                    // 求和
+                    .sum();
+            // 设置退款金额
+            refundReqDTO.setRefundAmount(partialRefundAmount);
+        }
+        
+        // 设置订单号
+        // 将订单号设置到退票请求中，用于支付服务识别订单
+        refundReqDTO.setOrderSn(requestParam.getOrderSn());
+        
+        // 调用支付服务退款
+        // 调用支付服务的退款接口，执行实际的退款操作
+        // 支付服务会根据退款金额和订单信息，将款项退回到用户的支付账户
+        Result<RefundRespDTO> refundRespResult = payRemoteService.commonRefund(refundReqDTO);
+        
+        // 校验退款结果
+        // 如果退款失败或返回结果为空，抛出异常
+        // 注意：这里使用了 && 逻辑，应该是 || 逻辑（退款失败 或 数据为空）
+        if (!refundRespResult.isSuccess() || Objects.isNull(refundRespResult.getData())) {
+            throw new ServiceException("车票订单退款失败");
+        }
+        
+        // TODO: 返回退票结果
+        // 需要构建并返回退票响应对象，包含退款金额、退票状态等信息
+        // 同时需要回滚相关资源（释放座位、更新缓存、令牌桶等），类似 cancelTicketOrder 的逻辑
         return null;
     }
 

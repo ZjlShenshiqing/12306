@@ -9,7 +9,7 @@ import org.openzjl.index12306.biz.ticketservice.common.enums.VehicleSeatTypeEnum
 import org.openzjl.index12306.biz.ticketservice.common.enums.VehicleTypeEnum;
 import org.openzjl.index12306.biz.ticketservice.dao.entity.TrainStationPriceDO;
 import org.openzjl.index12306.biz.ticketservice.dao.mapper.TrainStationPriceMapper;
-import org.openzjl.index12306.biz.ticketservice.dto.req.PurchaseTicketPassengerDetailDTO;
+import org.openzjl.index12306.biz.ticketservice.dto.domain.PurchaseTicketPassengerDetailDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.req.PurchaseTicketReqDTO;
 import org.openzjl.index12306.biz.ticketservice.remote.UserRemoteService;
 import org.openzjl.index12306.biz.ticketservice.remote.dto.PassengerRespDTO;
