@@ -1,5 +1,6 @@
 package org.openzjl.index12306.biz.userservice.service;
 
+import org.openzjl.index12306.biz.userservice.dto.req.UserDeletionReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.req.UserLoginReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.req.UserRegisterReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.resp.UserLoginRespDTO;
@@ -52,5 +53,10 @@ public interface UserLoginService {
      */
     UserRegisterRespDTO register(UserRegisterReqDTO requestParam);
 
-
+    /**
+     * 注销用户
+     *
+     * @param requestParam 注销用户入参
+     */
+    void deletion(UserDeletionReqDTO requestParam);
 }

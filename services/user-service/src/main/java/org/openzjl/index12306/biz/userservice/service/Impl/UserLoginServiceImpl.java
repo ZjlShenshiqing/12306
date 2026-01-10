@@ -9,24 +9,22 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.openzjl.index12306.biz.userservice.common.enums.UserChainMarkEnum;
-import org.openzjl.index12306.biz.userservice.dao.entity.UserDO;
-import org.openzjl.index12306.biz.userservice.dao.entity.UserMailDO;
-import org.openzjl.index12306.biz.userservice.dao.entity.UserPhoneDO;
-import org.openzjl.index12306.biz.userservice.dao.entity.UserReuseDO;
-import org.openzjl.index12306.biz.userservice.dao.mapper.UserMailMapper;
-import org.openzjl.index12306.biz.userservice.dao.mapper.UserMapper;
-import org.openzjl.index12306.biz.userservice.dao.mapper.UserPhoneMapper;
-import org.openzjl.index12306.biz.userservice.dao.mapper.UserReuseMapper;
+import org.openzjl.index12306.biz.userservice.dao.entity.*;
+import org.openzjl.index12306.biz.userservice.dao.mapper.*;
+import org.openzjl.index12306.biz.userservice.dto.req.UserDeletionReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.req.UserLoginReqDTO;
+import org.openzjl.index12306.biz.userservice.dto.req.UserQueryRespDTO;
 import org.openzjl.index12306.biz.userservice.dto.req.UserRegisterReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.resp.UserLoginRespDTO;
 import org.openzjl.index12306.biz.userservice.dto.resp.UserRegisterRespDTO;
 import org.openzjl.index12306.biz.userservice.service.UserLoginService;
+import org.openzjl.index12306.biz.userservice.service.UserService;
 import org.openzjl.index12306.framework.starter.cache.DistributedCache;
 import org.openzjl.index12306.framework.starter.convention.exception.ClientException;
 import org.openzjl.index12306.framework.starter.convention.exception.ServiceException;
 import org.openzjl.index12306.framework.starter.designpattern.chain.AbstractChainContext;
 import org.openzjl.index12306.framework.starter.log.toolkit.BeanUtil;
+import org.openzjl.index12306.framework.starter.user.core.UserContext;
 import org.openzjl.index12306.framework.starter.user.core.UserInfoDTO;
 import org.openzjl.index12306.framework.starter.user.toolkit.JWTUtil;
 import org.redisson.api.RBloomFilter;
@@ -37,11 +35,11 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-import static org.openzjl.index12306.biz.userservice.common.constant.RedisKeyConstant.LOCK_USER_REGISTER;
-import static org.openzjl.index12306.biz.userservice.common.constant.RedisKeyConstant.USER_REGISTER_REUSE_SHARDING;
+import static org.openzjl.index12306.biz.userservice.common.constant.RedisKeyConstant.*;
 import static org.openzjl.index12306.biz.userservice.common.enums.UserRegisterErrorCodeEnum.*;
 import static org.openzjl.index12306.biz.userservice.toolkit.UserReuseUtil.hashShardingIdx;
 
@@ -64,6 +62,8 @@ public class UserLoginServiceImpl implements UserLoginService {
     private final AbstractChainContext abstractChainContext;
     private final RedissonClient redissonClient;
     private final UserReuseMapper userReuseMapper;
+    private final UserService userService;
+    private final UserDeletionMapper userDeletionMapper;
 
     /**
      * 用户登录接口实现
@@ -422,5 +422,127 @@ public class UserLoginServiceImpl implements UserLoginService {
         return BeanUtil.convert(requestParam, UserRegisterRespDTO.class);
     }
 
+    /**
+     * 用户注销接口实现。
+     * <p>
+     * 用户注销功能，用于删除用户账号及相关数据，并将用户名添加到复用表供后续注册使用。
+     * 使用分布式锁保证并发安全，使用事务保证数据一致性。
+     * </p>
+     *
+     * <p>执行流程：</p>
+     * <ol>
+     *     <li>校验用户身份：确保当前登录用户与要注销的用户一致，防止恶意注销他人账号。</li>
+     *     <li>获取分布式锁：基于用户名获取锁，防止并发注销操作。</li>
+     *     <li>查询用户信息：获取用户的完整信息（身份证、手机号、邮箱等）。</li>
+     *     <li>插入注销记录表：记录用户的身份证信息，用于后续防止重复注册。</li>
+     *     <li>更新用户主表：设置注销时间，标记用户已注销（软删除）。</li>
+     *     <li>更新手机号表：设置注销时间，标记手机号已注销。</li>
+     *     <li>更新邮箱表：如果存在邮箱，设置注销时间，标记邮箱已注销。</li>
+     *     <li>清理缓存：删除缓存中的 Token，使用户无法再使用该 Token 登录。</li>
+     *     <li>添加到复用表：将用户名添加到复用表，供后续注册使用。</li>
+     *     <li>添加到 Redis Set：将用户名添加到 Redis Set（分片存储），用于快速查询。</li>
+     *     <li>释放锁：无论成功与否，都要释放分布式锁。</li>
+     * </ol>
+     *
+     * <p>数据表操作：</p>
+     * <ul>
+     *     <li>用户注销表（UserDeletionDO）：记录已注销用户的身份证信息，防止同一身份证重复注册。</li>
+     *     <li>用户主表（UserDO）：软删除，设置注销时间，不物理删除数据。</li>
+     *     <li>手机号表（UserPhoneDO）：软删除，设置注销时间。</li>
+     *     <li>邮箱表（UserMailDO）：软删除，设置注销时间。</li>
+     *     <li>用户名复用表（UserReuseDO）：存储可复用的用户名。</li>
+     * </ul>
+     *
+     * <p>注意事项：</p>
+     * <ul>
+     *     <li>使用 {@code @Transactional} 注解，任何步骤失败都会回滚所有数据库操作。</li>
+     *     <li>使用软删除机制，不物理删除数据，保留历史记录。</li>
+     *     <li>注销后用户名可以复用，但需要等待一定时间（由业务规则决定）。</li>
+     *     <li>同一身份证号不能重复注册（通过注销表校验）。</li>
+     * </ul>
+     *
+     * @param requestParam 用户注销请求参数（包含用户名）
+     * @throws ServiceException 当用户身份验证失败时抛出
+     */
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public void deletion(UserDeletionReqDTO requestParam) {
+        // 校验用户身份，从 UserContext 获取当前登录的用户名
+        // 确保只有用户本人才能注销自己的账号，防止恶意注销他人账号
+        String username = UserContext.getUserName();
 
+        // 比较当前登录用户名和要注销的用户名是否一致
+        // 如果不一致，抛出异常，拒绝注销操作
+        if (!Objects.equals(username, requestParam.getUsername())) {
+            throw new ServiceException("注销账号与登录账号不一致");
+        }
+
+        // 基于用户名获取分布式锁，防止并发注销操作
+        // 锁的 key：USER_DELETION + 用户名
+        // 例如：user_deletion:zhangsan
+        RLock lock = redissonClient.getLock(USER_DELETION + requestParam.getUsername());
+        lock.lock();
+        try {
+            // 查询用户信息
+            // 查询用户的完整信息，包括身份证、手机号、邮箱等
+            // 这些信息用于后续的注销操作和记录
+            UserQueryRespDTO userQueryRespDTO = userService.queryUserByUsername(username);
+            
+            // 插入注销记录表
+            // 记录已注销用户的身份证信息，用于后续防止同一身份证重复注册
+            // 这是业务规则：同一身份证号不能重复注册
+            UserDeletionDO userDeletionDO = UserDeletionDO.builder()
+                    .idType(userQueryRespDTO.getIdType())      // 证件类型
+                    .idCard(userQueryRespDTO.getIdCard())       // 身份证号
+                    .build();
+            userDeletionMapper.insert(userDeletionDO);
+            
+            // 更新用户主表
+            // 设置注销时间，标记用户已注销
+            // 使用软删除机制，不物理删除数据，保留历史记录
+            UserDO userDO = new UserDO();
+            userDO.setDeletionTime(System.currentTimeMillis());  // 设置注销时间（当前时间戳）
+            userDO.setUsername(username);                         // 用户名
+            userMapper.deletionUser(userDO);
+            
+            // 更新手机号表
+            // 设置手机号的注销时间，标记手机号已注销
+            // 这样该手机号可以重新绑定到其他用户名
+            UserPhoneDO userPhoneDO = UserPhoneDO.builder()
+                    .phone(userQueryRespDTO.getPhone())              // 手机号
+                    .deletionTime(System.currentTimeMillis())        // 设置注销时间
+                    .build();
+            userPhoneMapper.deletionUser(userPhoneDO);
+            
+            // 更新邮箱表
+            // 如果用户有邮箱，设置邮箱的注销时间，标记邮箱已注销
+            // 这样该邮箱可以重新绑定到其他用户名
+            if (StrUtil.isNotBlank(userQueryRespDTO.getMail())) {
+                UserMailDO userMailDO = UserMailDO.builder()
+                        .mail(userQueryRespDTO.getMail())            // 邮箱
+                        .deletionTime(System.currentTimeMillis())    // 设置注销时间
+                        .build();
+                userMailMapper.deletionUser(userMailDO);
+            }
+            
+            // 清理缓存中的 Token
+            // 删除缓存中的用户登录信息，使 Token 失效
+            // 用户无法再使用该 Token 进行身份验证，需要重新登录
+            distributedCache.delete(UserContext.getToken());
+            
+            // 将用户名添加到复用表
+            // 将用户名添加到复用表，供后续注册使用
+            // 这样其他用户可以使用该用户名进行注册
+            userReuseMapper.insert(new UserReuseDO(username));
+            
+            // 将用户名添加到 Redis Set
+            // 将用户名添加到 Redis Set 中，用于快速查询用户名是否可复用
+            // 使用哈希分片，根据用户名计算分片索引，添加到对应的 Set 中
+            StringRedisTemplate instance = (StringRedisTemplate) distributedCache.getInstance();
+            instance.opsForSet().add(USER_REGISTER_REUSE_SHARDING + hashShardingIdx(username), username);
+        } finally {
+            // 释放分布式锁，无论注销成功与否，都要释放锁，避免死锁
+            lock.unlock();
+        }
+    }
 }
