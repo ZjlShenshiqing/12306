@@ -47,6 +47,7 @@ public class UserLoginController {
      * @param accessToken 用户accessToken
      * @return 退出登录结果
      */
+    @GetMapping("/api/user-service/logout")
     public Result<Void> logout(@RequestParam(required = true) String accessToken) {
         userLoginService.logout(accessToken);
         return Results.success();
