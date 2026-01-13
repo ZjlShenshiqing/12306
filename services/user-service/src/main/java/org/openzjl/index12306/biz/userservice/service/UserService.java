@@ -1,7 +1,7 @@
 package org.openzjl.index12306.biz.userservice.service;
 
 import jakarta.validation.constraints.NotEmpty;
-import org.openzjl.index12306.biz.userservice.dto.req.UserQueryRespDTO;
+import org.openzjl.index12306.biz.userservice.dto.resp.UserQueryRespDTO;
 import org.openzjl.index12306.biz.userservice.dto.req.UserUpdateReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.resp.UserQueryActualRespDTO;
 

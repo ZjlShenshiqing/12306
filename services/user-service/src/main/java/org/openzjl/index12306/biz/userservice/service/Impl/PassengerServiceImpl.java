@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.openzjl.index12306.biz.userservice.common.enums.VerifyStatusEnum;
 import org.openzjl.index12306.biz.userservice.dao.entity.PassengerDO;
 import org.openzjl.index12306.biz.userservice.dao.mapper.PassengerMapper;
+import org.openzjl.index12306.biz.userservice.dto.req.PassengerRemoveReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.req.PassengerReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.resp.PassengerActualRespDTO;
 import org.openzjl.index12306.biz.userservice.dto.resp.PassengerRespDTO;
@@ -263,7 +264,7 @@ public class PassengerServiceImpl implements PassengerService {
             message = "正在移除乘车人，请稍后再尝试..."
     )
     @Override
-    public void removePassenger(PassengerReqDTO requestParam) {
+    public void removePassenger(PassengerRemoveReqDTO requestParam) {
         // 从用户上下文获取当前用户名
         String username = UserContext.getUserName();
         

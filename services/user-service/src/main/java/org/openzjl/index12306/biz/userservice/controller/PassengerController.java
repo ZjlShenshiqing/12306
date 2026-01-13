@@ -1,6 +1,7 @@
 package org.openzjl.index12306.biz.userservice.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.openzjl.index12306.biz.userservice.dto.req.PassengerRemoveReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.req.PassengerReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.resp.PassengerActualRespDTO;
 import org.openzjl.index12306.biz.userservice.dto.resp.PassengerRespDTO;
@@ -103,7 +104,7 @@ public class PassengerController {
             scene = IdempotentSceneEnum.RESTAPI,
             message = "正在移除乘车人，请稍后再尝试..."
     )
-    public Result<Void> removePassenger(PassengerReqDTO requestParam) {
+    public Result<Void> removePassenger(PassengerRemoveReqDTO requestParam) {
         passengerService.removePassenger(requestParam);
         return Results.success();
     }

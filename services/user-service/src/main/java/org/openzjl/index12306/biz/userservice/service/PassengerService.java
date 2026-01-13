@@ -1,5 +1,6 @@
 package org.openzjl.index12306.biz.userservice.service;
 
+import org.openzjl.index12306.biz.userservice.dto.req.PassengerRemoveReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.req.PassengerReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.resp.PassengerActualRespDTO;
 import org.openzjl.index12306.biz.userservice.dto.resp.PassengerRespDTO;
@@ -50,5 +51,5 @@ public interface PassengerService {
      *
      * @param requestParam 乘车人信息
      */
-    void removePassenger(PassengerReqDTO requestParam);
+    void removePassenger(PassengerRemoveReqDTO requestParam);
 }

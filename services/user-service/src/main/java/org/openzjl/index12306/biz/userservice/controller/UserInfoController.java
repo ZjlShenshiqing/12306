@@ -4,7 +4,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.RequiredArgsConstructor;
 import org.openzjl.index12306.biz.userservice.dto.req.UserDeletionReqDTO;
-import org.openzjl.index12306.biz.userservice.dto.req.UserQueryRespDTO;
+import org.openzjl.index12306.biz.userservice.dto.resp.UserQueryRespDTO;
 import org.openzjl.index12306.biz.userservice.dto.req.UserRegisterReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.req.UserUpdateReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.resp.UserQueryActualRespDTO;
