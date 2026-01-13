@@ -1,0 +1,18 @@
+package org.openzjl.index12306.biz.orderservice;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+/**
+ * 订单服务应用启动器
+ *
+ * @author zhangjlk
+ * @date 2026/1/13 20:44
+ */
+@SpringBootApplication
+public class OrderServiceApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(OrderServiceApplication.class, args);
+    }
+}
