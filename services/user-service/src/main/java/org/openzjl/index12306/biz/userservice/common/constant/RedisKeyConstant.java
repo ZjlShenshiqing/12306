@@ -23,4 +23,9 @@ public final class RedisKeyConstant {
      */
     public static final String USER_REGISTER_REUSE_SHARDING = "index12306-user-service:user-reuse:";
 
+    /**
+     * 用户乘车人列表，Key Prefix + 用户名
+     */
+    public static final String USER_PASSENGER_LIST = "index12306-user-service:user-passenger-list:";
+
 }
