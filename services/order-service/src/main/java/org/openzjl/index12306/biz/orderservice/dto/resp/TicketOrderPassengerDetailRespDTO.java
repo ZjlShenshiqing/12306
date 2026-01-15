@@ -6,7 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.openzjl.index12306.biz.orderservice.common.enums.OrderItemStatusEnum;
+import org.openzjl.index12306.biz.orderservice.common.enums.OrderStatusEnum;
 import org.openzjl.index12306.biz.orderservice.serialize.IdCardDesensitizationSerializer;
 
 /**
@@ -87,7 +87,7 @@ public class TicketOrderPassengerDetailRespDTO {
      * 数据库/接口里存的是数字（Integer 的状态码），但前端/调用方更想要一个可读的中文/英文状态名。
      * 所以在返回结果时，框架会自动帮你把 status=1 翻译成 statusName="已支付" 这种“人能看懂”的文本。
      */
-    @AssembleEnum(type = OrderItemStatusEnum.class, ref = "statusName")
+    @AssembleEnum(type = OrderStatusEnum.class, ref = "statusName")
     private Integer status;
 
     /**

@@ -1,6 +1,8 @@
 package org.openzjl.index12306.biz.orderservice.service;
 
+import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderPageQueryReqDTO;
 import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderDetailRespDTO;
+import org.openzjl.index12306.framework.starter.convention.page.PageResponse;
 
 /**
  *
@@ -16,4 +18,12 @@ public interface OrderService {
      * @return        车票订单
      */
     TicketOrderDetailRespDTO queryTicketByOrderSn(String orderSn);
+
+    /**
+     * 根据用户名分页查询车票订单
+     *
+     * @param requestParam 根据用户id分页查询对象
+     * @return 订单分页详情
+     */
+    PageResponse<TicketOrderDetailRespDTO> pageTicketOrder(TicketOrderPageQueryReqDTO requestParam);
 }
