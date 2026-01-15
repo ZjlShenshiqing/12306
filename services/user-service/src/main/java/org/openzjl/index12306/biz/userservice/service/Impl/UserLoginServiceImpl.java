@@ -1,6 +1,8 @@
 package org.openzjl.index12306.biz.userservice.service.Impl;
 
+import cn.hutool.core.lang.Opt;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.system.UserInfo;
 import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -11,7 +13,7 @@ import org.openzjl.index12306.biz.userservice.dao.entity.*;
 import org.openzjl.index12306.biz.userservice.dao.mapper.*;
 import org.openzjl.index12306.biz.userservice.dto.req.UserDeletionReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.req.UserLoginReqDTO;
-import org.openzjl.index12306.biz.userservice.dto.resp.UserQueryRespDTO;
+import org.openzjl.index12306.biz.userservice.dto.req.UserQueryRespDTO;
 import org.openzjl.index12306.biz.userservice.dto.req.UserRegisterReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.resp.UserLoginRespDTO;
 import org.openzjl.index12306.biz.userservice.dto.resp.UserRegisterRespDTO;

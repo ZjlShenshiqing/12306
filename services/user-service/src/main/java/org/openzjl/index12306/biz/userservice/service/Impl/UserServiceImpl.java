@@ -11,7 +11,7 @@ import org.openzjl.index12306.biz.userservice.dao.entity.UserMailDO;
 import org.openzjl.index12306.biz.userservice.dao.mapper.UserDeletionMapper;
 import org.openzjl.index12306.biz.userservice.dao.mapper.UserMailMapper;
 import org.openzjl.index12306.biz.userservice.dao.mapper.UserMapper;
-import org.openzjl.index12306.biz.userservice.dto.resp.UserQueryRespDTO;
+import org.openzjl.index12306.biz.userservice.dto.req.UserQueryRespDTO;
 import org.openzjl.index12306.biz.userservice.dto.req.UserUpdateReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.resp.UserQueryActualRespDTO;
 import org.openzjl.index12306.biz.userservice.service.UserService;
