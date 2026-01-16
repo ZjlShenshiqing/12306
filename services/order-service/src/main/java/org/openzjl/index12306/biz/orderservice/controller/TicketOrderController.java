@@ -3,7 +3,9 @@ package org.openzjl.index12306.biz.orderservice.controller;
 import lombok.RequiredArgsConstructor;
 import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderItemQueryReqDTO;
 import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderPageQueryReqDTO;
+import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderSelfPageQueryReqDTO;
 import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderDetailRespDTO;
+import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderDetailSelfRespDTO;
 import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderPassengerDetailRespDTO;
 import org.openzjl.index12306.biz.orderservice.service.OrderItemService;
 import org.openzjl.index12306.biz.orderservice.service.OrderService;
@@ -60,5 +62,15 @@ public class TicketOrderController {
     @GetMapping("/api/order-service/order/ticket/page")
     public Result<PageResponse<TicketOrderDetailRespDTO>> pageTicketOrder(TicketOrderPageQueryReqDTO requestParam) {
         return Results.success(orderService.pageTicketOrder(requestParam));
+    }
+
+    /**
+     * 分页查询本人车票订单
+     *
+     * @param requestParam 请求参数
+     * @return 本人车票订单详情（分页结果）
+     */
+    public Result<PageResponse<TicketOrderDetailSelfRespDTO>> pageSelfTicketOrder(TicketOrderSelfPageQueryReqDTO requestParam) {
+        return Results.success(orderService.pageSelfTicketOrder(requestParam));
     }
 }

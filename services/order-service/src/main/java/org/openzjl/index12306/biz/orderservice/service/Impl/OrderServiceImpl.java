@@ -10,15 +10,23 @@ import lombok.extern.slf4j.Slf4j;
 import org.openzjl.index12306.biz.orderservice.common.enums.OrderStatusEnum;
 import org.openzjl.index12306.biz.orderservice.dao.entity.OrderDO;
 import org.openzjl.index12306.biz.orderservice.dao.entity.OrderItemDO;
+import org.openzjl.index12306.biz.orderservice.dao.entity.OrderItemPassengerDO;
 import org.openzjl.index12306.biz.orderservice.dao.mapper.OrderItemMapper;
 import org.openzjl.index12306.biz.orderservice.dao.mapper.OrderMapper;
 import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderPageQueryReqDTO;
+import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderSelfPageQueryReqDTO;
 import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderDetailRespDTO;
+import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderDetailSelfRespDTO;
 import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderPassengerDetailRespDTO;
+import org.openzjl.index12306.biz.orderservice.remote.UserRemoteService;
+import org.openzjl.index12306.biz.orderservice.remote.dto.UserQueryActualRespDTO;
+import org.openzjl.index12306.biz.orderservice.service.OrderPassengerRelationService;
 import org.openzjl.index12306.biz.orderservice.service.OrderService;
 import org.openzjl.index12306.framework.starter.convention.page.PageResponse;
+import org.openzjl.index12306.framework.starter.convention.result.Result;
 import org.openzjl.index12306.framework.starter.database.toolkit.PageUtil;
 import org.openzjl.index12306.framework.starter.log.toolkit.BeanUtil;
+import org.openzjl.index12306.framework.starter.user.core.UserContext;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -45,6 +53,16 @@ public class OrderServiceImpl implements OrderService {
      * 订单明细数据访问对象
      */
     private final OrderItemMapper orderItemMapper;
+
+    /**
+     * 订单乘客关系服务
+     */
+    private final OrderPassengerRelationService orderPassengerRelationService;
+
+    /**
+     * 用户远程服务
+     */
+    private UserRemoteService userRemoteService;
 
     /**
      * 根据订单号查询车票订单详情
@@ -103,6 +121,44 @@ public class OrderServiceImpl implements OrderService {
             // 将订单明细实体列表转换为乘客详情DTO列表，并设置到订单详情响应对象中
             result.setPassengerDetails(BeanUtil.convert(orderItemDOList, TicketOrderPassengerDetailRespDTO.class));
             return result;
+        });
+    }
+
+    /**
+     * 分页查询当前登录用户作为乘客的订单列表
+     * 通过当前登录用户的身份证号，查询该用户作为乘客的所有订单记录
+     * 返回包含订单详细信息的列表，按创建时间倒序排列
+     *
+     * @param requestParam 订单分页查询请求参数，包含分页信息
+     * @return 分页响应对象，包含当前用户作为乘客的订单详情列表
+     */
+    @Override
+    public PageResponse<TicketOrderDetailSelfRespDTO> pageSelfTicketOrder(TicketOrderSelfPageQueryReqDTO requestParam) {
+        // 通过远程服务获取当前登录用户的真实信息（包含身份证号）
+        Result<UserQueryActualRespDTO> userActualResp = userRemoteService.queryActualUserByUsername(UserContext.getUserName());
+        // 构建订单乘客关系查询条件：根据身份证号精确匹配，按创建时间倒序排列
+        LambdaQueryWrapper<OrderItemPassengerDO> queryWrapper = Wrappers.lambdaQuery(OrderItemPassengerDO.class)
+                .eq(OrderItemPassengerDO::getIdCard, userActualResp.getData().getIdCard())
+                .orderByDesc(OrderItemPassengerDO::getCreateTime);
+        // 执行分页查询，获取当前用户作为乘客的订单关系记录
+        IPage<OrderItemPassengerDO> orderItemPassengerPage = orderPassengerRelationService.page(PageUtil.convert(requestParam), queryWrapper);
+        // 将分页结果转换为响应DTO，并为每条记录填充完整的订单信息
+        return PageUtil.convert(orderItemPassengerPage, each -> {
+            // 根据订单号查询订单主表信息
+            LambdaQueryWrapper<OrderDO> orderQueryWrapper = Wrappers.lambdaQuery(OrderDO.class)
+                    .eq(OrderDO::getOrderSn, each.getOrderSn());
+            OrderDO orderDO = orderMapper.selectOne(orderQueryWrapper);
+            // 构建订单明细查询条件：根据订单号和身份证号精确匹配，查询该乘客的订单明细
+            LambdaQueryWrapper<OrderItemDO> orderItemQueryWrapper = Wrappers.lambdaQuery(OrderItemDO.class)
+                    .eq(OrderItemDO::getOrderSn, orderDO.getOrderSn())
+                    .eq(OrderItemDO::getIdCard, each.getIdCard());
+            // 查询订单明细信息
+            OrderItemDO orderItemDO = orderItemMapper.selectOne(orderItemQueryWrapper);
+            // 将订单明细实体转换为响应DTO
+            TicketOrderDetailSelfRespDTO actualResult = BeanUtil.convert(orderItemDO, TicketOrderDetailSelfRespDTO.class);
+            // 忽略空值和空字符串，补充转换订单明细数据到响应对象
+            BeanUtil.convertIgnoreNullAndBlank(orderItemDO, actualResult);
+            return actualResult;
         });
     }
 
