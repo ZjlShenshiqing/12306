@@ -1,5 +1,6 @@
 package org.openzjl.index12306.biz.orderservice.service;
 
+import org.openzjl.index12306.biz.orderservice.dto.domain.OrderStatusReversalDTO;
 import org.openzjl.index12306.biz.orderservice.dto.req.CancelTicketOrderReqDTO;
 import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderCreateReqDTO;
 import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderPageQueryReqDTO;
@@ -64,5 +65,10 @@ public interface OrderService {
     Boolean cancelTicketOrder(CancelTicketOrderReqDTO requestParam);
 
 
-    void statusReversal();
+    /**
+     * 订单状态反转
+     *
+     * @param requestParam 请求参数
+     */
+    void statusReversal(OrderStatusReversalDTO requestParam);
 }

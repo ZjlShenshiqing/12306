@@ -20,6 +20,7 @@ import org.openzjl.index12306.biz.orderservice.dao.entity.OrderItemDO;
 import org.openzjl.index12306.biz.orderservice.dao.entity.OrderItemPassengerDO;
 import org.openzjl.index12306.biz.orderservice.dao.mapper.OrderItemMapper;
 import org.openzjl.index12306.biz.orderservice.dao.mapper.OrderMapper;
+import org.openzjl.index12306.biz.orderservice.dto.domain.OrderStatusReversalDTO;
 import org.openzjl.index12306.biz.orderservice.dto.req.*;
 import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderDetailRespDTO;
 import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderDetailSelfRespDTO;
@@ -494,6 +495,98 @@ public class OrderServiceImpl implements OrderService {
         
         // 返回成功标识
         return true;
+    }
+
+    /**
+     * 订单状态反转
+     * 
+     * 业务场景：
+     * 用于订单状态的灵活修改，用于以下场景：
+     * 1. 订单补偿：当订单状态异常时，需要手动修正订单状态
+     * 2. 状态回滚：当某些操作失败后，需要将订单状态回滚到之前的状态
+     * 3. 特殊业务处理：某些特殊业务场景需要直接修改订单状态
+     * 
+     * 业务规则：
+     * - 只能修改"待支付"状态的订单
+     * - 已支付、已完成、已取消的订单不能通过此方法修改状态
+     * - 可以同时修改订单主表和订单明细表的状态
+     * - 状态值由调用方指定，不进行业务校验（需要调用方保证状态值的正确性）
+     * 
+     * 并发控制：
+     * - 使用分布式锁（Redisson）防止同一订单被并发修改状态
+     * - 锁的Key格式：order:status-reversal:order_sn_{订单号}
+     * - 如果获取锁失败，只记录警告日志，不抛出异常（允许并发场景下的幂等性处理）
+     * 
+     * 与其他方法的区别：
+     * - closeTicketOrder/cancelTicketOrder：固定将状态改为"已取消"，使用事务
+     * - statusReversal：可以修改为任意状态，不使用事务，获取锁失败时不抛异常
+     * 
+     * 注意事项：
+     * - 本方法不进行业务状态校验，调用方需要确保状态值的正确性
+     * - 建议仅在特殊场景下使用（如：补偿、回滚、数据修复等）
+     * - 获取锁失败时不会抛出异常，但也不会执行状态更新（保证幂等性）
+     * - 状态更新失败时会抛出异常，需要调用方处理
+     *
+     * @param requestParam 订单状态反转请求参数，包含：
+     *                    - orderSn：订单号
+     *                    - orderStatus：订单主表的目标状态
+     *                    - orderItemStatus：订单明细表的目标状态
+     * @throws ServiceException 订单不存在、订单状态不正确、更新失败时抛出
+     */
+    @Override
+    public void statusReversal(OrderStatusReversalDTO requestParam) {
+        // 查询订单是否存在
+        LambdaQueryWrapper<OrderDO> queryWrapper = Wrappers.lambdaQuery(OrderDO.class)
+                .eq(OrderDO::getOrderSn, requestParam.getOrderSn());
+        OrderDO orderDO = orderMapper.selectOne(queryWrapper);
+        
+        // 校验订单状态
+        // 订单不存在，抛出异常
+        if (orderDO == null) {
+            throw new ServiceException(OrderCanalErrorCodeEnum.ORDER_CANAL_UNKNOWN_ERROR);
+        } 
+        // 订单状态不是"待支付"，不能修改（只能修改待支付状态的订单）
+        else if (orderDO.getStatus() != OrderStatusEnum.PENDING_PAYMENT.getStatus()) {
+            throw new ServiceException(OrderCanalErrorCodeEnum.ORDER_CANAL_STATUS_ERROR);
+        }
+        
+        // 获取分布式锁，防止并发修改同一订单的状态
+        // 锁的Key：order:status-reversal:order_sn_{订单号}
+        RLock lock = redissonClient.getLock(StrBuilder.create("order:status-reversal:order_sn_").append(requestParam.getOrderSn()).toString());
+        // 尝试获取锁，如果获取失败（返回false），说明订单正在被其他线程处理
+        // 只记录警告日志，不抛出异常（保证幂等性，允许重复调用）
+        if (!lock.tryLock()) {
+            log.warn("订单重复修改状态，状态反转请求参数: {}", JSON.toJSONString(requestParam));
+        }
+        
+        try {
+            // 更新订单主表状态为目标状态（由请求参数指定）
+            OrderDO updateOrderDO = new OrderDO();
+            updateOrderDO.setStatus(requestParam.getOrderStatus());  // 使用请求参数中的目标状态
+            LambdaUpdateWrapper<OrderDO> updateWrapper = Wrappers.lambdaUpdate(OrderDO.class)
+                    .eq(OrderDO::getOrderSn, requestParam.getOrderSn());
+            int updateResult = orderMapper.update(updateOrderDO, updateWrapper);
+            // 校验更新结果，如果更新行数<=0，说明更新失败
+            if (updateResult <= 0) {
+                throw new ServiceException(OrderCanalErrorCodeEnum.ORDER_STATUS_REVERSAL_ERROR);
+            }
+            
+            // 批量更新订单明细表状态为目标状态（由请求参数指定）
+            // 更新该订单下所有订单明细的状态
+            OrderItemDO updateOrderItemDO = new OrderItemDO();
+            updateOrderItemDO.setStatus(requestParam.getOrderItemStatus());  // 使用请求参数中的目标状态
+            LambdaUpdateWrapper<OrderItemDO> updateItemWrapper = Wrappers.lambdaUpdate(OrderItemDO.class)
+                    .eq(OrderItemDO::getOrderSn, requestParam.getOrderSn());
+            int updateItemResult = orderItemMapper.update(updateOrderItemDO, updateItemWrapper);
+            // 校验更新结果，如果更新行数<=0，说明更新失败
+            if (updateItemResult <= 0) {
+                throw new ServiceException(OrderCanalErrorCodeEnum.ORDER_STATUS_REVERSAL_ERROR);
+            }
+        } finally {
+            // 释放分布式锁，确保锁一定会被释放（即使发生异常）
+            // 注意：如果之前获取锁失败，这里也会尝试释放（Redisson会处理这种情况）
+            lock.unlock();
+        }
     }
 
     /**
