@@ -1,10 +1,7 @@
 package org.openzjl.index12306.biz.orderservice.controller;
 
 import lombok.RequiredArgsConstructor;
-import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderCreateReqDTO;
-import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderItemQueryReqDTO;
-import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderPageQueryReqDTO;
-import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderSelfPageQueryReqDTO;
+import org.openzjl.index12306.biz.orderservice.dto.req.*;
 import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderDetailRespDTO;
 import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderDetailSelfRespDTO;
 import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderPassengerDetailRespDTO;
@@ -83,5 +80,16 @@ public class TicketOrderController {
     @PostMapping("/api/order-service/order/ticket/create")
     public Result<String> createTicketOrder(@RequestBody TicketOrderCreateReqDTO requestParam) {
         return Results.success(orderService.createTicketOrder(requestParam));
+    }
+
+    /**
+     * 车票订单关闭
+     *
+     * @param requestParam 订单关闭请求参数
+     * @return 订单关闭结果
+     */
+    @PostMapping("/api/order-service/order/ticket/close")
+    public Result<Boolean> closeTicketOrder(@RequestBody CancelTicketOrderReqDTO requestParam) {
+        return Results.success(orderService.closeTicketOrder(requestParam));
     }
 }

@@ -2,24 +2,25 @@ package org.openzjl.index12306.biz.orderservice.service.Impl;
 
 import cn.crane4j.annotation.AutoOperate;
 import cn.hutool.core.collection.ListUtil;
+import cn.hutool.core.text.StrBuilder;
 import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.client.producer.SendStatus;
+import org.openzjl.index12306.biz.orderservice.common.enums.OrderCanalErrorCodeEnum;
+import org.openzjl.index12306.biz.orderservice.common.enums.OrderItemStatusEnum;
 import org.openzjl.index12306.biz.orderservice.common.enums.OrderStatusEnum;
 import org.openzjl.index12306.biz.orderservice.dao.entity.OrderDO;
 import org.openzjl.index12306.biz.orderservice.dao.entity.OrderItemDO;
 import org.openzjl.index12306.biz.orderservice.dao.entity.OrderItemPassengerDO;
 import org.openzjl.index12306.biz.orderservice.dao.mapper.OrderItemMapper;
 import org.openzjl.index12306.biz.orderservice.dao.mapper.OrderMapper;
-import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderCreateReqDTO;
-import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderItemCreateReqDTO;
-import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderPageQueryReqDTO;
-import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderSelfPageQueryReqDTO;
+import org.openzjl.index12306.biz.orderservice.dto.req.*;
 import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderDetailRespDTO;
 import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderDetailSelfRespDTO;
 import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderPassengerDetailRespDTO;
@@ -31,13 +32,17 @@ import org.openzjl.index12306.biz.orderservice.service.OrderItemService;
 import org.openzjl.index12306.biz.orderservice.service.OrderPassengerRelationService;
 import org.openzjl.index12306.biz.orderservice.service.OrderService;
 import org.openzjl.index12306.biz.orderservice.service.orderid.OrderIdGeneratorManager;
+import org.openzjl.index12306.framework.starter.convention.exception.ClientException;
 import org.openzjl.index12306.framework.starter.convention.exception.ServiceException;
 import org.openzjl.index12306.framework.starter.convention.page.PageResponse;
 import org.openzjl.index12306.framework.starter.convention.result.Result;
 import org.openzjl.index12306.framework.starter.database.toolkit.PageUtil;
 import org.openzjl.index12306.framework.starter.log.toolkit.BeanUtil;
 import org.openzjl.index12306.framework.starter.user.core.UserContext;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -79,6 +84,12 @@ public class OrderServiceImpl implements OrderService {
      * 延迟关闭订单消息生产者
      */
     private final DelayCloseOrderSendProduce delayCloseOrderSendProduce;
+
+    /**
+     * Redisson客户端，用于获取分布式锁
+     * 用于防止并发关闭同一订单
+     */
+    private final RedissonClient redissonClient;
 
     /**
      * 用户远程服务
@@ -300,6 +311,96 @@ public class OrderServiceImpl implements OrderService {
         
         // 返回订单号，供调用方使用（如：用于支付、查询等）
         return orderSn;
+    }
+
+    /**
+     * 关闭订单
+     * 
+     * 业务场景：
+     * 系统自动关闭订单（超时未支付，由延迟消息触发）
+     * 
+     * 业务规则：
+     * - 只能关闭"待支付"状态的订单
+     * - 已支付、已完成、已取消的订单不能再次关闭
+     * - 关闭订单会同时更新订单主表和订单明细表的状态
+     * 
+     * 并发控制：
+     * - 使用分布式锁（Redisson）防止同一订单被并发关闭
+     * - 锁的Key格式：order:canal:order_sn_{订单号}
+     * - 如果获取锁失败，说明订单正在被其他线程处理，直接返回错误
+     * 
+     * 事务保证：
+     * - 使用 @Transactional 注解，保证订单主表和明细表状态更新的原子性
+     * - 如果任何更新失败，整个操作会回滚
+     * 
+     * 注意事项：
+     * - 关闭订单后，车票库存的释放由消息消费者处理（不在本方法中）
+     * - 订单关闭后，用户无法再支付该订单
+     *
+     * @param requestParam 取消订单请求参数，包含订单号
+     * @return true 表示订单关闭成功
+     * @throws ServiceException 订单不存在、订单状态不正确、更新失败时抛出
+     * @throws ClientException 获取分布式锁失败时抛出（订单正在被处理）
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Boolean closeTicketOrder(CancelTicketOrderReqDTO requestParam) {
+        // 获取订单号
+        String orderSn = requestParam.getOrderSn();
+        
+        // 查询订单是否存在
+        LambdaQueryWrapper<OrderDO> queryWrapper = Wrappers.lambdaQuery(OrderDO.class)
+                .eq(OrderDO::getOrderSn, orderSn);
+        OrderDO orderDO = orderMapper.selectOne(queryWrapper);
+        
+        // 校验订单状态
+        // 订单不存在，抛出异常
+        if (orderDO == null) {
+            throw new ServiceException(OrderCanalErrorCodeEnum.ORDER_CANAL_UNKNOWN_ERROR);
+        } 
+        // 订单状态不是"待支付"，不能关闭（只能关闭待支付的订单）
+        else if (orderDO.getStatus() != OrderStatusEnum.PENDING_PAYMENT.getStatus()) {
+            throw new ServiceException(OrderCanalErrorCodeEnum.ORDER_CANAL_STATUS_ERROR);
+        }
+        
+        // 获取分布式锁，防止并发关闭同一订单
+        // 锁的Key：order:canal:order_sn_{订单号}
+        RLock lock = redissonClient.getLock(StrBuilder.create("order:canal:order_sn_").append(orderSn).toString());
+        // 尝试获取锁，如果获取失败（返回false），说明订单正在被其他线程处理
+        if (!lock.tryLock()) {
+            throw new ClientException(OrderCanalErrorCodeEnum.ORDER_CANAL_STATUS_ERROR);
+        }
+        
+        try {
+            // 更新订单主表状态为"已取消"
+            OrderDO updateOrderDO = new OrderDO();
+            updateOrderDO.setStatus(OrderStatusEnum.CLOSED.getStatus());  // 状态：已取消（30）
+            LambdaUpdateWrapper<OrderDO> updateWrapper = Wrappers.lambdaUpdate(OrderDO.class)
+                    .eq(OrderDO::getOrderSn, orderSn);
+            int updateResult = orderMapper.update(updateOrderDO, updateWrapper);
+            // 校验更新结果，如果更新行数<=0，说明更新失败（可能订单已被其他线程修改）
+            if (updateResult <= 0) {
+                throw new ServiceException(OrderCanalErrorCodeEnum.ORDER_CANAL_ERROR);
+            }
+            
+            // 批量更新订单明细表状态为"已取消"
+            // 更新该订单下所有订单明细的状态
+            OrderItemDO updateOrderItemDO = new OrderItemDO();
+            updateOrderItemDO.setStatus(OrderItemStatusEnum.CLOSED.getStatus());  // 订单明细状态：已取消
+            LambdaUpdateWrapper<OrderItemDO> updateItemWrapper = Wrappers.lambdaUpdate(OrderItemDO.class)
+                    .eq(OrderItemDO::getOrderSn, orderSn);
+            int updateItemResult = orderItemMapper.update(updateOrderItemDO, updateItemWrapper);
+            // 校验更新结果，如果更新行数<=0，说明更新失败
+            if (updateItemResult <= 0) {
+                throw new ServiceException(OrderCanalErrorCodeEnum.ORDER_CANAL_ERROR);
+            }
+        } finally {
+            // 释放分布式锁，确保锁一定会被释放（即使发生异常）
+            lock.unlock();
+        }
+        
+        // 返回成功标识
+        return true;
     }
 
     /**

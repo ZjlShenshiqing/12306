@@ -1,5 +1,6 @@
 package org.openzjl.index12306.biz.orderservice.service;
 
+import org.openzjl.index12306.biz.orderservice.dto.req.CancelTicketOrderReqDTO;
 import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderCreateReqDTO;
 import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderPageQueryReqDTO;
 import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderSelfPageQueryReqDTO;
@@ -45,4 +46,12 @@ public interface OrderService {
      * @return 车票订单创建结果
      */
     String createTicketOrder(TicketOrderCreateReqDTO requestParam);
+
+    /**
+     * 关闭车票订单
+     *
+     * @param requestParam 取消火车票入参
+     * @return 结果
+     */
+    Boolean closeTicketOrder(CancelTicketOrderReqDTO requestParam);
 }
