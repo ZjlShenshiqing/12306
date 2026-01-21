@@ -28,7 +28,7 @@ public class OrderItemDO extends BaseDO {
     /**
      * 订单号
      */
-    private Long orderSn;
+    private String orderSn;
 
     /**
      * 用户ID
@@ -53,7 +53,7 @@ public class OrderItemDO extends BaseDO {
     /**
      * 座位类型
      */
-    private String seatType;
+    private Integer seatType;
 
     /**
      * 座位号

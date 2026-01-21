@@ -1,5 +1,6 @@
 package org.openzjl.index12306.biz.orderservice.service;
 
+import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderCreateReqDTO;
 import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderPageQueryReqDTO;
 import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderSelfPageQueryReqDTO;
 import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderDetailRespDTO;
@@ -36,4 +37,12 @@ public interface OrderService {
      * @return 本人车票订单详情（分页结果）
      */
     PageResponse<TicketOrderDetailSelfRespDTO> pageSelfTicketOrder(TicketOrderSelfPageQueryReqDTO requestParam);
+
+    /**
+     * 车票订单创建
+     *
+     * @param requestParam 请求参数
+     * @return 车票订单创建结果
+     */
+    String createTicketOrder(TicketOrderCreateReqDTO requestParam);
 }
