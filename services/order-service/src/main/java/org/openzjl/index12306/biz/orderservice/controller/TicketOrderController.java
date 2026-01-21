@@ -92,4 +92,15 @@ public class TicketOrderController {
     public Result<Boolean> closeTicketOrder(@RequestBody CancelTicketOrderReqDTO requestParam) {
         return Results.success(orderService.closeTicketOrder(requestParam));
     }
+
+    /**
+     * 车票订单取消
+     *
+     * @param requestParam 订单取消请求参数
+     * @return 订单取消结果
+     */
+    @PostMapping("/api/order-service/order/ticket/cancel")
+    public Result<Boolean> cancelTicketOrder(@RequestBody CancelTicketOrderReqDTO requestParam) {
+        return Results.success(orderService.cancelTicketOrder(requestParam));
+    }
 }

@@ -404,6 +404,99 @@ public class OrderServiceImpl implements OrderService {
     }
 
     /**
+     * 用户主动取消订单
+     * 
+     * 业务场景：
+     * 用户在订单创建后、支付前，主动取消订单
+     * 通常发生在用户改变主意、选错车次、或发现订单信息有误等情况
+     * 
+     * 业务规则：
+     * - 只能取消"待支付"状态的订单
+     * - 已支付、已完成、已取消的订单不能再次取消
+     * - 取消订单会同时更新订单主表和订单明细表的状态为"已取消"
+     * 
+     * 并发控制：
+     * - 使用分布式锁（Redisson）防止同一订单被并发取消
+     * - 锁的Key格式：order:canal:order_sn_{订单号}
+     * - 如果获取锁失败，说明订单正在被其他线程处理（可能是用户重复点击或系统正在关闭），返回"订单重复取消"错误
+     * 
+     * 与 closeTicketOrder 的区别：
+     * - closeTicketOrder：系统自动关闭订单（超时未支付），使用 @Transactional 保证事务
+     * - cancelTicketOrder：用户主动取消订单，不使用事务注解（由调用方控制事务）
+     * - 获取锁失败时的错误码不同：cancelTicketOrder 返回"订单重复取消"，closeTicketOrder 返回"订单状态错误"
+     * 
+     * 注意事项：
+     * - 取消订单后，车票库存的释放由消息消费者处理（不在本方法中）
+     * - 订单取消后，用户无法再支付该订单
+     * - 建议在调用本方法前，先检查订单是否可以被取消（如：是否已支付）
+     *
+     * @param requestParam 取消订单请求参数，包含订单号
+     * @return true 表示订单取消成功
+     * @throws ServiceException 订单不存在、订单状态不正确、更新失败时抛出
+     * @throws ClientException 获取分布式锁失败时抛出（订单正在被处理，可能是重复取消）
+     */
+    @Override
+    public Boolean cancelTicketOrder(CancelTicketOrderReqDTO requestParam) {
+        // 获取订单号
+        String orderSn = requestParam.getOrderSn();
+        
+        // 查询订单是否存在
+        LambdaQueryWrapper<OrderDO> queryWrapper = Wrappers.lambdaQuery(OrderDO.class)
+                .eq(OrderDO::getOrderSn, orderSn);
+        OrderDO orderDO = orderMapper.selectOne(queryWrapper);
+        
+        // 校验订单状态
+        // 订单不存在，抛出异常
+        if (orderDO == null) {
+            throw new ServiceException(OrderCanalErrorCodeEnum.ORDER_CANAL_UNKNOWN_ERROR);
+        } 
+        // 订单状态不是"待支付"，不能取消（只能取消待支付的订单）
+        else if (orderDO.getStatus() != OrderStatusEnum.PENDING_PAYMENT.getStatus()) {
+            throw new ServiceException(OrderCanalErrorCodeEnum.ORDER_CANAL_STATUS_ERROR);
+        }
+        
+        // 获取分布式锁，防止并发取消同一订单
+        // 锁的Key：order:canal:order_sn_{订单号}
+        RLock lock = redissonClient.getLock(StrBuilder.create("order:canal:order_sn_").append(orderSn).toString());
+        // 尝试获取锁，如果获取失败（返回false），说明订单正在被其他线程处理
+        // 可能是用户重复点击取消按钮，或系统正在自动关闭订单
+        if (!lock.tryLock()) {
+            throw new ClientException(OrderCanalErrorCodeEnum.ORDER_CANAL_REPETITION_ERROR);
+        }
+        
+        try {
+            // 更新订单主表状态为"已取消"
+            OrderDO updateOrderDO = new OrderDO();
+            updateOrderDO.setStatus(OrderStatusEnum.CLOSED.getStatus());  // 状态：已取消（30）
+            LambdaUpdateWrapper<OrderDO> updateWrapper = Wrappers.lambdaUpdate(OrderDO.class)
+                    .eq(OrderDO::getOrderSn, orderSn);
+            int updateResult = orderMapper.update(updateOrderDO, updateWrapper);
+            // 校验更新结果，如果更新行数<=0，说明更新失败（可能订单已被其他线程修改）
+            if (updateResult <= 0) {
+                throw new ServiceException(OrderCanalErrorCodeEnum.ORDER_CANAL_ERROR);
+            }
+            
+            // 批量更新订单明细表状态为"已取消"
+            // 更新该订单下所有订单明细的状态
+            OrderItemDO updateOrderItemDO = new OrderItemDO();
+            updateOrderItemDO.setStatus(OrderItemStatusEnum.CLOSED.getStatus());  // 订单明细状态：已取消
+            LambdaUpdateWrapper<OrderItemDO> updateItemWrapper = Wrappers.lambdaUpdate(OrderItemDO.class)
+                    .eq(OrderItemDO::getOrderSn, orderSn);
+            int updateItemResult = orderItemMapper.update(updateOrderItemDO, updateItemWrapper);
+            // 校验更新结果，如果更新行数<=0，说明更新失败
+            if (updateItemResult <= 0) {
+                throw new ServiceException(OrderCanalErrorCodeEnum.ORDER_CANAL_ERROR);
+            }
+        } finally {
+            // 释放分布式锁，确保锁一定会被释放（即使发生异常）
+            lock.unlock();
+        }
+        
+        // 返回成功标识
+        return true;
+    }
+
+    /**
      * 根据订单状态类型构建对应的订单状态列表
      * 用于订单分页查询时，根据前端传入的状态类型筛选对应的订单状态
      *

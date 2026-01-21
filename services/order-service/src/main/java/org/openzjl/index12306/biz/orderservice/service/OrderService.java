@@ -54,4 +54,15 @@ public interface OrderService {
      * @return 结果
      */
     Boolean closeTicketOrder(CancelTicketOrderReqDTO requestParam);
+
+    /**
+     * 车票订单取消
+     *
+     * @param requestParam 订单取消请求参数
+     * @return 订单取消结果
+     */
+    Boolean cancelTicketOrder(CancelTicketOrderReqDTO requestParam);
+
+
+    void statusReversal();
 }
