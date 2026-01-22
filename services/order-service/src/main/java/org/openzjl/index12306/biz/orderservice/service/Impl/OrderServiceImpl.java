@@ -26,6 +26,7 @@ import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderDetailRespDTO
 import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderDetailSelfRespDTO;
 import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderPassengerDetailRespDTO;
 import org.openzjl.index12306.biz.orderservice.mq.event.DelayCloseOrderEvent;
+import org.openzjl.index12306.biz.orderservice.mq.event.PayResultCallbackOrderEvent;
 import org.openzjl.index12306.biz.orderservice.mq.produce.DelayCloseOrderSendProduce;
 import org.openzjl.index12306.biz.orderservice.remote.UserRemoteService;
 import org.openzjl.index12306.biz.orderservice.remote.dto.UserQueryActualRespDTO;
@@ -586,6 +587,59 @@ public class OrderServiceImpl implements OrderService {
             // 释放分布式锁，确保锁一定会被释放（即使发生异常）
             // 注意：如果之前获取锁失败，这里也会尝试释放（Redisson会处理这种情况）
             lock.unlock();
+        }
+    }
+
+    /**
+     * 支付结果回调订单处理
+     * 
+     * 业务场景：
+     * 当用户完成支付后，支付服务会通过消息队列发送支付结果回调事件
+     * 本方法用于接收支付回调事件，更新订单的支付信息（支付时间、支付方式）
+     * 
+     * 业务规则：
+     * - 只更新订单的支付时间和支付方式，不更新订单状态
+     * - 订单状态的更新由其他方法处理（如：支付成功后更新为"已支付"状态）
+     * - 根据订单号精确匹配更新订单记录
+     * 
+     * 更新内容：
+     * - payTime：支付时间（从支付回调事件中获取）
+     * - payType：支付方式/支付渠道（如：支付宝、微信、银行卡等）
+     * 
+     * 注意事项：
+     * - 本方法不进行订单存在性校验，如果订单不存在，更新结果为0会抛出异常
+     * - 本方法不进行订单状态校验，任何状态的订单都可以更新支付信息
+     * - 建议在调用本方法前，先确认订单存在且支付回调信息正确
+     * - 如果更新失败（更新行数<=0），会抛出异常，需要调用方处理
+     * 
+     * 调用时机：
+     * - 通常由消息队列消费者调用，处理支付服务发送的支付结果回调事件
+     * - 支付成功后，支付服务会发送包含支付时间、支付渠道等信息的回调事件
+     *
+     * @param requestParam 支付结果回调事件，包含：
+     *                    - orderSn：订单号
+     *                    - gmtPayment：支付时间
+     *                    - channel：支付渠道/支付方式
+     *                    - 其他支付相关信息（如：交易号、支付金额等，本方法暂不使用）
+     * @throws ServiceException 订单更新失败时抛出（订单不存在或更新失败）
+     */
+    @Override
+    public void payCallbackOrder(PayResultCallbackOrderEvent requestParam) {
+        // 构建订单更新对象，设置支付时间和支付方式
+        OrderDO updateOrderDO = new OrderDO();
+        updateOrderDO.setPayTime(requestParam.getGmtPayment());  // 支付时间（从支付回调事件中获取）
+        updateOrderDO.setPayType(requestParam.getChannel());      // 支付方式/支付渠道（如：支付宝、微信等）
+        
+        // 构建更新条件：根据订单号精确匹配
+        LambdaUpdateWrapper<OrderDO> updateWrapper = Wrappers.lambdaUpdate(OrderDO.class)
+                .eq(OrderDO::getOrderSn, requestParam.getOrderSn());
+        
+        // 执行更新操作
+        int updateResult = orderMapper.update(updateOrderDO, updateWrapper);
+        
+        // 校验更新结果，如果更新行数<=0，说明更新失败（可能是订单不存在）
+        if (updateResult <= 0) {
+            throw new ServiceException(OrderCanalErrorCodeEnum.ORDER_STATUS_REVERSAL_ERROR);
         }
     }
 

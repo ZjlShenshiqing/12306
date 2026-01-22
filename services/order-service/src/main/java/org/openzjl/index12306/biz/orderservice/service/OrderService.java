@@ -7,6 +7,7 @@ import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderPageQueryReqDT
 import org.openzjl.index12306.biz.orderservice.dto.req.TicketOrderSelfPageQueryReqDTO;
 import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderDetailRespDTO;
 import org.openzjl.index12306.biz.orderservice.dto.resp.TicketOrderDetailSelfRespDTO;
+import org.openzjl.index12306.biz.orderservice.mq.event.PayResultCallbackOrderEvent;
 import org.openzjl.index12306.framework.starter.convention.page.PageResponse;
 
 /**
@@ -71,4 +72,11 @@ public interface OrderService {
      * @param requestParam 请求参数
      */
     void statusReversal(OrderStatusReversalDTO requestParam);
+
+    /**
+     * 支付结果回调订单
+     *
+     * @param requestParam 请求参数
+     */
+    void payCallbackOrder(PayResultCallbackOrderEvent requestParam);
 }
