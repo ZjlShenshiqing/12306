@@ -1,15 +1,16 @@
 package org.openzjl.index12306.biz.payservice.controller;
 
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.openzjl.index12306.biz.payservice.convert.PayRequestConvert;
 import org.openzjl.index12306.biz.payservice.dto.PayCommand;
 import org.openzjl.index12306.biz.payservice.dto.base.PayRequest;
+import org.openzjl.index12306.biz.payservice.dto.resp.PayInfoRespDTO;
 import org.openzjl.index12306.biz.payservice.dto.resp.PayRespDTO;
 import org.openzjl.index12306.biz.payservice.service.PayService;
 import org.openzjl.index12306.framework.starter.convention.result.Result;
 import org.openzjl.index12306.framework.starter.web.Results;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * 支付控制层
@@ -48,9 +49,33 @@ public class PayController {
      * @param requestParam 支付请求指令（包含渠道、交易类型、订单号、金额等）
      * @return 支付结果（如支付跳转信息、二维码链接、预支付信息等，取决于具体渠道/交易类型）
      */
+    @PostMapping("/api/pay-service/pay/create")
     public Result<PayRespDTO> pay(@RequestBody PayCommand requestParam) {
         PayRequest payRequest = PayRequestConvert.command2PayRequest(requestParam);
         PayRespDTO result = payService.commonPay(payRequest);
         return Results.success(result);
+    }
+
+    /**
+     * 根据订单号查询支付单详情
+     *
+     * @param orderSn 订单号
+     * @return 支付单详情
+     */
+    @GetMapping("/api/pay-service/pay/query/order-sn")
+    // 从请求参数里拿到名为 orderSn 的参数值
+    public Result<PayInfoRespDTO> getPayInfoByOrderSn(@RequestParam(value = "orderSn") String orderSn) {
+        return Results.success(payService.getPayInfoByOrderSn(orderSn));
+    }
+
+    /**
+     * 根据支付流水号查询支付单详情
+     *
+     * @param paySn 支付流水号
+     * @return 支付单详情
+     */
+    @GetMapping("/api/pay-service/pay/query/pay-sn")
+    public Result<PayInfoRespDTO> getPayInfoByPaySn(@RequestParam(value = "paySn") String paySn) {
+        return Results.success(payService.getPayInfoByPaySn(paySn));
     }
 }

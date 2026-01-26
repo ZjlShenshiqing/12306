@@ -1,6 +1,8 @@
 package org.openzjl.index12306.biz.payservice.service.Impl;
 
 import com.alibaba.fastjson2.JSON;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.openzjl.index12306.biz.payservice.common.enums.TradeStatusEnum;
@@ -8,6 +10,7 @@ import org.openzjl.index12306.biz.payservice.dao.entity.PayDO;
 import org.openzjl.index12306.biz.payservice.dao.mapper.PayMapper;
 import org.openzjl.index12306.biz.payservice.dto.base.PayRequest;
 import org.openzjl.index12306.biz.payservice.dto.base.PayResponse;
+import org.openzjl.index12306.biz.payservice.dto.resp.PayInfoRespDTO;
 import org.openzjl.index12306.biz.payservice.dto.resp.PayRespDTO;
 import org.openzjl.index12306.biz.payservice.service.Impl.payid.PayIdGeneratorManager;
 import org.openzjl.index12306.biz.payservice.service.PayService;
@@ -21,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import static org.openzjl.index12306.biz.payservice.common.constant.RedisKeyConstant.ORDER_PAY_RESULT_INFO;
@@ -137,5 +141,64 @@ public class PayServiceImpl implements PayService {
         
         // 将支付策略执行结果转换为响应对象并返回
         return BeanUtil.convert(result, PayRespDTO.class);
+    }
+
+    /**
+     * 根据订单号查询支付信息
+     * <p>
+     * 通过订单号查询对应的支付记录信息，返回转换后的支付信息响应对象。
+     * 用于查询特定订单的支付状态和详情。
+     * </p>
+     *
+     * @param orderSn 订单号
+     *                <ul>
+     *                  <li>业务系统生成的唯一订单标识</li>
+     *                  <li>与支付请求中的订单号对应</li>
+     *                </ul>
+     * @return 支付信息响应对象，包含支付状态、金额、支付时间等详细信息
+     *         <ul>
+     *           <li>如果找到对应的支付记录，返回转换后的响应对象</li>
+     *           <li>如果未找到支付记录，返回 null</li>
+     *         </ul>
+     */
+    @Override
+    public PayInfoRespDTO getPayInfoByOrderSn(String orderSn) {
+        // 构建查询条件：使用订单号作为精确匹配条件
+        LambdaQueryWrapper<PayDO> queryWrapper = Wrappers.lambdaQuery(PayDO.class)
+                .eq(PayDO::getOrderSn, orderSn);
+        // 执行数据库查询，获取唯一的支付记录
+        PayDO payDO = payMapper.selectOne(queryWrapper);
+        // 将支付记录实体转换为响应对象并返回
+        return BeanUtil.convert(payDO, PayInfoRespDTO.class);
+    }
+
+    /**
+     * 根据支付流水号查询支付信息
+     * <p>
+     * 通过支付流水号查询对应的支付记录信息，返回转换后的支付信息响应对象。
+     * 用于查询特定支付交易的详细信息。
+     * </p>
+     *
+     * @param paySn 支付流水号
+     *              <ul>
+     *                <li>系统生成的唯一支付交易标识</li>
+     *                <li>格式：分布式ID前缀 + 订单号后6位</li>
+     *                <li>由 PayIdGeneratorManager.generateId() 方法生成</li>
+     *              </ul>
+     * @return 支付信息响应对象，包含支付状态、金额、支付时间等详细信息
+     *         <ul>
+     *           <li>如果找到对应的支付记录，返回转换后的响应对象</li>
+     *           <li>如果未找到支付记录，返回 null</li>
+     *         </ul>
+     */
+    @Override
+    public PayInfoRespDTO getPayInfoByPaySn(String paySn) {
+        // 构建查询条件：使用支付流水号作为精确匹配条件
+        LambdaQueryWrapper<PayDO> queryWrapper = Wrappers.lambdaQuery(PayDO.class)
+                .eq(PayDO::getPaySn, paySn);
+        // 执行数据库查询，获取唯一的支付记录
+        PayDO payDO = payMapper.selectOne(queryWrapper);
+        // 将支付记录实体转换为响应对象并返回
+        return BeanUtil.convert(payDO, PayInfoRespDTO.class);
     }
 }
