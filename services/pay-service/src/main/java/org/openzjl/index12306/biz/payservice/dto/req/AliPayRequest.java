@@ -1,10 +1,12 @@
-package org.openzjl.index12306.biz.payservice.dto.base;
+package org.openzjl.index12306.biz.payservice.dto.req;
 
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
 import org.openzjl.index12306.biz.payservice.common.enums.PayChannelEnum;
 import org.openzjl.index12306.biz.payservice.common.enums.PayTradeTypeEnum;
+import org.openzjl.index12306.biz.payservice.dto.base.AbstractPayRequest;
+import org.openzjl.index12306.biz.payservice.dto.base.PayRequest;
 
 import java.math.BigDecimal;
 

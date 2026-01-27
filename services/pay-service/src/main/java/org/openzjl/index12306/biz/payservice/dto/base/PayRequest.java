@@ -1,5 +1,7 @@
 package org.openzjl.index12306.biz.payservice.dto.base;
 
+import org.openzjl.index12306.biz.payservice.dto.req.AliPayRequest;
+
 import java.math.BigDecimal;
 
 /**

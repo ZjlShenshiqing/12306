@@ -2,7 +2,7 @@ package org.openzjl.index12306.biz.payservice.convert;
 
 import org.openzjl.index12306.biz.payservice.common.enums.PayChannelEnum;
 import org.openzjl.index12306.biz.payservice.dto.PayCommand;
-import org.openzjl.index12306.biz.payservice.dto.base.AliPayRequest;
+import org.openzjl.index12306.biz.payservice.dto.req.AliPayRequest;
 import org.openzjl.index12306.biz.payservice.dto.base.PayRequest;
 import org.openzjl.index12306.framework.starter.log.toolkit.BeanUtil;
 

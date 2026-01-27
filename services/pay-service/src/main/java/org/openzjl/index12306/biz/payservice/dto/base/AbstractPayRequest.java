@@ -2,9 +2,8 @@ package org.openzjl.index12306.biz.payservice.dto.base;
 
 import lombok.Getter;
 import lombok.Setter;
+import org.openzjl.index12306.biz.payservice.dto.req.AliPayRequest;
 import org.zjl.index12306.framework.starter.distributedid.toolkit.SnowflakeIdUtil;
-
-import java.math.BigDecimal;
 
 /**
  * 抽象支付入参实体
