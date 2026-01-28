@@ -1,4 +1,4 @@
-package org.openzjl.index12306.biz.payservice.dto;
+package org.openzjl.index12306.biz.payservice.dto.command;
 
 import lombok.Data;
 import org.openzjl.index12306.biz.payservice.dto.base.AbstractPayRequest;

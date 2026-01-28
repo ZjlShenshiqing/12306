@@ -1,4 +1,4 @@
-package org.openzjl.index12306.biz.payservice.service.Impl.payid;
+package org.openzjl.index12306.biz.payservice.service.payid;
 
 /**
  * 分布式全局唯一订单号生成器
