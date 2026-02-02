@@ -72,5 +72,5 @@ public class PayDO extends BaseDO {
     /**
      * 支付状态
      */
-    private Integer status;
+    private String status;
 }

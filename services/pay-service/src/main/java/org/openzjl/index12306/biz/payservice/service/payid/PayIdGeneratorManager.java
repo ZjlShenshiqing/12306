@@ -1,4 +1,4 @@
-package org.openzjl.index12306.biz.payservice.service.Impl.payid;
+package org.openzjl.index12306.biz.payservice.service.payid;
 
 import lombok.RequiredArgsConstructor;
 import org.openzjl.index12306.framework.starter.cache.DistributedCache;

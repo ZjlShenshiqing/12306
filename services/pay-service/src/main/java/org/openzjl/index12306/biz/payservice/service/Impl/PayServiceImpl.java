@@ -12,7 +12,7 @@ import org.openzjl.index12306.biz.payservice.dto.base.PayRequest;
 import org.openzjl.index12306.biz.payservice.dto.base.PayResponse;
 import org.openzjl.index12306.biz.payservice.dto.resp.PayInfoRespDTO;
 import org.openzjl.index12306.biz.payservice.dto.resp.PayRespDTO;
-import org.openzjl.index12306.biz.payservice.service.Impl.payid.PayIdGeneratorManager;
+import org.openzjl.index12306.biz.payservice.service.payid.PayIdGeneratorManager;
 import org.openzjl.index12306.biz.payservice.service.PayService;
 import org.openzjl.index12306.framework.starter.cache.DistributedCache;
 import org.openzjl.index12306.framework.starter.convention.exception.ServiceException;
@@ -24,7 +24,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import static org.openzjl.index12306.biz.payservice.common.constant.RedisKeyConstant.ORDER_PAY_RESULT_INFO;

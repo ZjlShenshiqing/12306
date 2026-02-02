@@ -1,9 +1,8 @@
 package org.openzjl.index12306.biz.payservice.controller;
 
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.openzjl.index12306.biz.payservice.convert.PayRequestConvert;
-import org.openzjl.index12306.biz.payservice.dto.PayCommand;
+import org.openzjl.index12306.biz.payservice.dto.command.PayCommand;
 import org.openzjl.index12306.biz.payservice.dto.base.PayRequest;
 import org.openzjl.index12306.biz.payservice.dto.resp.PayInfoRespDTO;
 import org.openzjl.index12306.biz.payservice.dto.resp.PayRespDTO;
