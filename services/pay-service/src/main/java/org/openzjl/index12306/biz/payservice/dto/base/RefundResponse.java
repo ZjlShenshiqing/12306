@@ -20,7 +20,7 @@ public final class RefundResponse {
     /**
      * 退款状态
      */
-    private String status;
+    private Integer status;
 
     /**
      * 第三方交易凭证
