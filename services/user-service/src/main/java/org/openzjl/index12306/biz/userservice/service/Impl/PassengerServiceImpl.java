@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2025-2026 zhangjlk
+ * All rights reserved.
+ */
 package org.openzjl.index12306.biz.userservice.service.Impl;
 
 import cn.hutool.core.collection.CollUtil;
@@ -11,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.openzjl.index12306.biz.userservice.dao.entity.PassengerDO;
 import org.openzjl.index12306.biz.userservice.dao.mapper.PassengerMapper;
+import org.openzjl.index12306.biz.userservice.dto.req.PassengerRemoveReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.req.PassengerReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.resp.PassengerActualRespDTO;
 import org.openzjl.index12306.biz.userservice.dto.resp.PassengerRespDTO;
@@ -126,7 +131,7 @@ public class PassengerServiceImpl implements PassengerService {
     }
 
     @Override
-    public void deletePassenger(PassengerReqDTO requestParam) {
+    public void removePassenger(PassengerRemoveReqDTO requestParam) {
 
     }
 

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2025-2026 zhangjlk
+ * All rights reserved.
+ */
 package org.openzjl.index12306.biz.payservice.service.Impl;
 
 import com.alibaba.fastjson2.JSON;

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2025-2026 zhangjlk
+ * All rights reserved.
+ */
 package org.openzjl.index12306.framework.starter.database.toolkit;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;

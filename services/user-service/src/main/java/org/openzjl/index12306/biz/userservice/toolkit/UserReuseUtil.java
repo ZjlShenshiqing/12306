@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2025-2026 zhangjlk
+ * All rights reserved.
+ */
 package org.openzjl.index12306.biz.userservice.toolkit;
 
 import static org.openzjl.index12306.biz.userservice.common.constant.Index12306Constant.USER_REGISTER_REUSE_SHARDING_COUNT;

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2025-2026 zhangjlk
+ * All rights reserved.
+ */
 package org.zjl.index12306.framework.starter.distributedid.handler;
 
 import lombok.NonNull;

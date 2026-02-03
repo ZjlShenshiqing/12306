@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2025-2026 zhangjlk
+ * All rights reserved.
+ */
 package org.openzjl.index12306.biz.userservice.dto.resp;
 
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;

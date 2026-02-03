@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2025-2026 zhangjlk
+ * All rights reserved.
+ */
 package org.openzjl.index12306.biz.ticketservice.service.Impl;
 
 import cn.hutool.core.collection.CollUtil;
@@ -926,8 +930,8 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
         // 例如：3个乘客，2个要商务座(0)，1个要一等座(1)
         // 结果：{0: [乘客1, 乘客2], 1: [乘客3]}
         // 这样不同座位类型的购票操作可以并行处理，提高并发性能
-        Map<Integer, List<PurchaseTicketPassengerDetailDTO>> seatTypeMap = requestParam.getPassengers().stream()
-                .collect(Collectors.groupingBy(PurchaseTicketPassengerDetailDTO::getSeatType));
+        Map<Integer, List<org.openzjl.index12306.biz.ticketservice.dto.domain.PurchaseTicketPassengerDetailDTO>> seatTypeMap = requestParam.getPassengers().stream()
+                .collect(Collectors.groupingBy(org.openzjl.index12306.biz.ticketservice.dto.domain.PurchaseTicketPassengerDetailDTO::getSeatType));
         
         // 为每个座位类型获取锁
         // 遍历每个座位类型，为每个类型获取本地锁和分布式锁

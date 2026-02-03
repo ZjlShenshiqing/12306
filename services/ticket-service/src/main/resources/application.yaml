@@ -7,7 +7,7 @@ spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: root
-    password: root
+    password: 123456Po*
     url: jdbc:mysql://192.168.150.100:3306/12306_ticket?characterEncoding=utf-8&zeroDateTimeBehavior=convertToNull&transformedBitIsBoolean=true&serverTimezone=GMT%2B8&allowPublicKeyRetrieval=true
     hikari:
       connection-test-query: select 1
@@ -27,8 +27,8 @@ spring:
         server-addr: ${spring.cloud.nacos.discovery.server-addr}
         import-check:
           enabled: false
-        username: nacos
-        password: nacos
+      username: nacos
+      password: nacos
     sentinel:
       transport:
         dashboard: 192.168.150.100:8686
@@ -69,11 +69,16 @@ mybatis-plus:
 
 framework:
   fastjson:
-    safa-mode: true
+    safe-mode: true
   cache:
     redis:
       value-timeout: 16
       value-time-unit: days
+
+ticket:
+  availability:
+    cache-update:
+      type: lazy
 
 feign:
   client:

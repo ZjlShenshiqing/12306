@@ -20,6 +20,7 @@
         <module>designpattern</module>
         <module>convention</module>
         <module>log</module>
+        <module>cache</module>
         <module>idempotent</module>
         <module>web</module>
     </modules>

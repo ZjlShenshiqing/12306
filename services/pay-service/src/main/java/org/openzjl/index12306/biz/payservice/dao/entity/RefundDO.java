@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2025-2026 zhangjlk
+ * All rights reserved.
+ */
 package org.openzjl.index12306.biz.payservice.dao.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -108,7 +112,7 @@ public class RefundDO {
     /**
      * 订单状态
      */
-    private String status;
+    private Integer status;
 
     /**
      * 退款时间

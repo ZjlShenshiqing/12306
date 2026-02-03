@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2025-2026 zhangjlk
+ * All rights reserved.
+ */
 package org.openzjl.index12306.biz.payservice.dao.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;

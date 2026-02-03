@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2025-2026 zhangjlk
+ * All rights reserved.
+ */
 package org.openzjl.index12306.biz.ticketservice.remote;
 
 import org.openzjl.index12306.biz.ticketservice.remote.dto.PayInfoRespDTO;
@@ -16,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
  * @author zhangjlk
  * @date 2025/12/15 上午10:20
  */
-@FeignClient(value = "index12306-order${unique-name:}-service", url = "http://127.0.0.1:9001")
+@FeignClient(value = "index12306-pay${unique-name:}-service", url = "http://127.0.0.1:9001")
 public interface PayRemoteService {
 
     /**

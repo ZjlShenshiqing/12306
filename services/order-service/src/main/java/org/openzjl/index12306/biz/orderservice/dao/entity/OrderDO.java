@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2025-2026 zhangjlk
+ * All rights reserved.
+ */
 package org.openzjl.index12306.biz.orderservice.dao.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;

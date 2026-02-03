@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2025-2026 zhangjlk
+ * All rights reserved.
+ */
 package org.openzjl.index12306.framework.starter.idempotent.annotation;
 
 import org.openzjl.index12306.framework.starter.idempotent.enums.IdempotentSceneEnum;

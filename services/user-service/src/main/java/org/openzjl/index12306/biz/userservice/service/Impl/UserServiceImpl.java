@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2025-2026 zhangjlk
+ * All rights reserved.
+ */
 package org.openzjl.index12306.biz.userservice.service.Impl;
 
 import cn.hutool.core.util.StrUtil;
@@ -11,9 +15,9 @@ import org.openzjl.index12306.biz.userservice.dao.entity.UserMailDO;
 import org.openzjl.index12306.biz.userservice.dao.mapper.UserDeletionMapper;
 import org.openzjl.index12306.biz.userservice.dao.mapper.UserMailMapper;
 import org.openzjl.index12306.biz.userservice.dao.mapper.UserMapper;
-import org.openzjl.index12306.biz.userservice.dto.req.UserQueryRespDTO;
 import org.openzjl.index12306.biz.userservice.dto.req.UserUpdateReqDTO;
 import org.openzjl.index12306.biz.userservice.dto.resp.UserQueryActualRespDTO;
+import org.openzjl.index12306.biz.userservice.dto.resp.UserQueryRespDTO;
 import org.openzjl.index12306.biz.userservice.service.UserService;
 import org.openzjl.index12306.framework.starter.convention.exception.ClientException;
 import org.openzjl.index12306.framework.starter.log.toolkit.BeanUtil;

@@ -9,11 +9,42 @@ spring:
     url: jdbc:shardingsphere:classpath:shardingsphere-config.yaml
   data:
     redis:
-      host:
+      host: 192.168.150.100
       port: 6379
   cloud:
     nacos:
       discovery:
-        server-addr:
-        password: nacos
-        username: nacos
+        server-addr: 192.168.150.100:8848
+      password: nacos
+      username: nacos
+    sentinel:
+      transport:
+        dashboard: 192.168.150.100:8686
+        port: 8719
+mybatis-plus:
+  global-config:
+    db-config:
+      logic-delete-field: delFlag
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+framework:
+  fastjson:
+    safe-mode: true
+  cache:
+    redis:
+      value-timeout: 50000
+      bloom-filter:
+        user-register:
+          name: user_register_cache_penetration_bloom_filter${unique-name:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+  metrics:
+    tags:
+      application: ${spring.application.name}
