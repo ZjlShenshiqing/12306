@@ -59,7 +59,7 @@ public class UserLoginServiceImpl implements UserLoginService {
     private final UserPhoneMapper userPhoneMapper;
     private final UserMapper userMapper;
     private final DistributedCache distributedCache;
-    private final RBloomFilter<String> userRegisterCachePenetrationBloomFilter;
+    private final RBloomFilter<String> cachePenetrationBloomFilter;
     private final AbstractChainContext abstractChainContext;
     private final RedissonClient redissonClient;
     private final UserReuseMapper userReuseMapper;
@@ -270,7 +270,7 @@ public class UserLoginServiceImpl implements UserLoginService {
         // 使用布隆过滤器快速判断用户名"可能存在"
         // - 如果返回 false：说明用户名一定不存在（无假阴性），可以直接返回 true
         // - 如果返回 true：说明用户名可能存在（可能有误判），需要进一步查询 Redis Set 确认
-        boolean hasUserName = userRegisterCachePenetrationBloomFilter.contains(username);
+        boolean hasUserName = cachePenetrationBloomFilter.contains(username);
         
         if (hasUserName) {
             // Redis Set 精确检查
@@ -413,7 +413,7 @@ public class UserLoginServiceImpl implements UserLoginService {
             // 更新布隆过滤器
             // 将新注册的用户名添加到布隆过滤器中
             // 这样后续查询用户名是否存在时，可以快速判断（防止缓存穿透）
-            userRegisterCachePenetrationBloomFilter.add(username);
+            cachePenetrationBloomFilter.add(username);
         } finally {
             lock.unlock();
         }
