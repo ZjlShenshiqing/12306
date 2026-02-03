@@ -1,0 +1,42 @@
+dataSources:
+  ds_0:
+    dataSourceClassName: com.zaxxer.hikari.HikariDataSource
+    driverClassName: com.mysql.cj.jdbc.Driver
+    jdbcUrl: jdbc:mysql://192.168.150.100:3306/12306_user_0?useUnicode=true&characterEncoding=UTF-8&rewriteBatchedStatements=true&allowMultiQueries=true&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: 123456Po*
+
+  ds_1:
+    dataSourceClassName: com.zaxxer.hikari.HikariDataSource
+    driverClassName: com.mysql.cj.jdbc.Driver
+    jdbcUrl: jdbc:mysql://192.168.150.100:3306/12306_user_1?useUnicode=true&characterEncoding=UTF-8&rewriteBatchedStatements=true&allowMultiQueries=true&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: 123456Po*
+
+rules:
+  - !SHARDING
+    tables:
+      t_user:
+        actualDataNodes: ds_${0..1}.t_user
+        databaseStrategy:
+          standard:
+            shardingColumn: id
+            shardingAlgorithmName: user_database_mod
+      t_user_detail:
+        actualDataNodes: ds_${0..1}.t_user_detail
+        databaseStrategy:
+          standard:
+            shardingColumn: user_id
+            shardingAlgorithmName: user_detail_database_mod
+    shardingAlgorithms:
+      user_database_mod:
+        type: HASH_MOD
+        props:
+          sharding-count: 2
+      user_detail_database_mod:
+        type: HASH_MOD
+        props:
+          sharding-count: 2
+
+props:
+  sql-show: true
