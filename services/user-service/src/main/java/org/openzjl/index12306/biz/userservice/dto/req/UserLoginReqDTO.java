@@ -22,7 +22,7 @@ public class UserLoginReqDTO {
     /**
      * 用户名
      */
-    private String usernameOrEmailOrPhone;
+    private String usernameOrMailOrPhone;
 
     /**
      * 密码

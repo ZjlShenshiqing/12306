@@ -7,6 +7,7 @@ package org.openzjl.index12306.framework.starter.database.handler;
 import com.baomidou.mybatisplus.core.handlers.MetaObjectHandler;
 import org.apache.ibatis.reflection.MetaObject;
 import org.openzjl.index12306.framework.starter.log.enums.DelEnum;
+import org.springframework.stereotype.Component;
 
 import java.util.Date;
 
@@ -33,6 +34,7 @@ import java.util.Date;
  * @author zhangjlk
  * @date 2025/9/22 20:33
  */
+@Component
 public class MyMetaObjectHandler implements MetaObjectHandler {
 
     /**

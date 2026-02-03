@@ -99,7 +99,7 @@ public class UserLoginServiceImpl implements UserLoginService {
     public UserLoginRespDTO login(UserLoginReqDTO requestParam) {
         // 获取登录凭证
         // 用户可能输入用户名、邮箱或手机号，需要识别具体类型
-        String usernameOrEmailOrPhone = requestParam.getUsernameOrEmailOrPhone();
+        String usernameOrEmailOrPhone = requestParam.getUsernameOrMailOrPhone();
         
         // 识别登录方式（邮箱/手机号/用户名）
         // 通过检查是否包含 '@' 符号来判断是否为邮箱
@@ -126,7 +126,7 @@ public class UserLoginServiceImpl implements UserLoginService {
                     .map(UserMailDO::getUsername)  // 提取用户名
                     .orElseThrow(() -> new ClientException("用户名/手机号/邮箱不存在"));
         } else {
-            // 手机号登录
+            // 手机号登录/用户名登录
             // 从手机号表中查询该手机号关联的用户名
             LambdaQueryWrapper<UserPhoneDO> queryWrapper = Wrappers.lambdaQuery(UserPhoneDO.class)
                     .eq(UserPhoneDO::getPhone, usernameOrEmailOrPhone);  // 根据手机号查询
