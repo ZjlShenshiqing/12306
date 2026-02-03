@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
  * @author zhangjlk
  * @date 2026/1/28 09:51
  */
-@FeignClient(value = "index12306-order${unique-name:}-service", url = "http://127.0.0.1:${server.port}")
+@FeignClient(value = "index12306-order${unique-name:}-service", url = "${aggregation.remote-url:}")
 public interface TicketOrderRemoteService {
 
     /**

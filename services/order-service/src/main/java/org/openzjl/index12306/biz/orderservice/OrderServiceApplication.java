@@ -4,6 +4,7 @@
  */
 package org.openzjl.index12306.biz.orderservice;
 
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
@@ -14,6 +15,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * @date 2026/1/13 20:44
  */
 @SpringBootApplication
+@MapperScan("org.openzjl.index12306.biz.orderservice.dao.mapper")
 public class OrderServiceApplication {
 
     public static void main(String[] args) {

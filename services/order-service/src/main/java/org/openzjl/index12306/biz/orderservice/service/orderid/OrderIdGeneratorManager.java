@@ -34,9 +34,8 @@ public final class OrderIdGeneratorManager implements InitializingBean {
 
     /**
      * Redisson客户端，用于获取分布式锁
-     * 注意：当前未通过构造函数注入，可能需要手动注入或使用@Autowired
      */
-    private RedissonClient redissonClient;
+    private final RedissonClient redissonClient;
 
     /**
      * 分布式缓存实例，用于访问Redis
