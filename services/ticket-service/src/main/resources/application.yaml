@@ -72,6 +72,7 @@ framework:
     safe-mode: true
   cache:
     redis:
+      prefix: "index12306-ticket-service:"
       value-timeout: 16
       value-time-unit: days
 
