@@ -6,8 +6,8 @@ if (Cookie.get('token')) {
 }
 
 const initAxios = Axios.create({
-  timeout: 1800000 //数据响应过期时间
-  // baseURL: 'http://12306-rd.magestack.cn:9000'
+  timeout: 1800000, //数据响应过期时间
+  baseURL: 'http://localhost:9000'
   // headers: ['Authorization', Cookie.get('token') ?? null]
 })
 
