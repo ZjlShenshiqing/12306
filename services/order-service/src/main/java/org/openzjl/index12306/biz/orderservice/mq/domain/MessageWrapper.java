@@ -10,7 +10,7 @@ import java.io.Serializable;
 import java.util.UUID;
 
 /**
- * 消息题包装器
+ * 消息体包装器
  *
  * @author zhangjlk
  * @date 2026/1/21 10:48
@@ -20,7 +20,7 @@ import java.util.UUID;
 @NoArgsConstructor(force = true)
 @AllArgsConstructor
 @RequiredArgsConstructor
-public class MessageWrapper<T> implements Serializable {
+public final class MessageWrapper<T> implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
