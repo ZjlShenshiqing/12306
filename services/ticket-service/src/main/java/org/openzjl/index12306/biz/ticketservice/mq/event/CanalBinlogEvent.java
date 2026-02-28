@@ -54,4 +54,30 @@ public class CanalBinlogEvent {
      * 主键名称
      */
     private List<String> pkNames;
+
+    /**
+     * SQL 语句
+     */
+    private String sql;
+
+    /**
+     * SQL 类型
+     */
+    private Map<String, Object> sqlType;
+
+    /**
+     * 表名
+     */
+    private String table;
+
+    /**
+     * ts 是指 Canal 收到这个 Binlog，构造为自己协议对象的时间
+     * 应用消费的延迟 = now - ts
+     */
+    private Long ts;
+
+    /**
+     * INSERT（新增）、UPDATE（更新）、DELETE（删除）等等
+     */
+    private String type;
 }
