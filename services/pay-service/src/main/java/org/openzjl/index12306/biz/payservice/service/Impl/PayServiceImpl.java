@@ -6,16 +6,21 @@ package org.openzjl.index12306.biz.payservice.service.Impl;
 
 import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.openzjl.index12306.biz.payservice.common.enums.TradeStatusEnum;
 import org.openzjl.index12306.biz.payservice.dao.entity.PayDO;
 import org.openzjl.index12306.biz.payservice.dao.mapper.PayMapper;
+import org.openzjl.index12306.biz.payservice.dto.base.PayCallbackRequest;
 import org.openzjl.index12306.biz.payservice.dto.base.PayRequest;
 import org.openzjl.index12306.biz.payservice.dto.base.PayResponse;
+import org.openzjl.index12306.biz.payservice.dto.req.PayCallbackReqDTO;
 import org.openzjl.index12306.biz.payservice.dto.resp.PayInfoRespDTO;
 import org.openzjl.index12306.biz.payservice.dto.resp.PayRespDTO;
+import org.openzjl.index12306.biz.payservice.mq.event.PayResultCallbackOrderEvent;
+import org.openzjl.index12306.biz.payservice.mq.produce.PayResultCallbackOrderSendProduce;
 import org.openzjl.index12306.biz.payservice.service.payid.PayIdGeneratorManager;
 import org.openzjl.index12306.biz.payservice.service.PayService;
 import org.openzjl.index12306.framework.starter.cache.DistributedCache;
@@ -28,6 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import static org.openzjl.index12306.biz.payservice.common.constant.RedisKeyConstant.ORDER_PAY_RESULT_INFO;
@@ -71,6 +77,9 @@ public class PayServiceImpl implements PayService {
      * 用于操作支付相关的数据库表，执行支付记录的插入操作。
      */
     private final PayMapper payMapper;
+
+    private final PayCallbackRequest payCallbackRequest;
+    private final PayResultCallbackOrderSendProduce payResultCallbackOrderSendProduce;
 
     /**
      * 通用支付方法
@@ -203,5 +212,31 @@ public class PayServiceImpl implements PayService {
         PayDO payDO = payMapper.selectOne(queryWrapper);
         // 将支付记录实体转换为响应对象并返回
         return BeanUtil.convert(payDO, PayInfoRespDTO.class);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void callbackPay(PayCallbackReqDTO payCallbackRequestParam) {
+        LambdaQueryWrapper<PayDO> queryWrapper = Wrappers.lambdaQuery(PayDO.class)
+                .eq(PayDO::getOrderSn, payCallbackRequestParam.getOrderRequestId());
+        PayDO payDO = payMapper.selectOne(queryWrapper);
+        if (Objects.isNull(payDO)) {
+            log.error("支付单不存在，orderRequestId={}", payCallbackRequestParam.getOrderRequestId());
+            throw new ServiceException("支付单不存在");
+        }
+        payDO.setTradeNo(payCallbackRequestParam.getTradeNo());
+        payDO.setStatus(TradeStatusEnum.WAIT_BUYER_PAY.tradeCode());
+        payDO.setPayAmount(payCallbackRequestParam.getPayAmount());
+        payDO.setGmtPayment(payCallbackRequestParam.getGmtPayment());
+        LambdaUpdateWrapper<PayDO> updateWrapper = Wrappers.lambdaUpdate(PayDO.class)
+                .eq(PayDO::getOrderSn, payCallbackRequestParam.getOrderSn());
+        int result = payMapper.update(payDO, updateWrapper);
+        if (result <= 0) {
+            log.error("修改支付单支付结果失败，支付单信息: {}", JSON.toJSONString(payDO));
+        }
+        // 交易成功，回调订单服务告知支付结果，修改订单流转状态
+        if (Objects.equals(payCallbackRequestParam.getStatus(), TradeStatusEnum.TRADE_SUCCESS.tradeCode())) {
+            payResultCallbackOrderSendProduce.sendMessage(BeanUtil.convert(payDO, PayResultCallbackOrderEvent.class));
+        }
     }
 }

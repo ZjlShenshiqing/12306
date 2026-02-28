@@ -52,7 +52,7 @@ public class PayCallbackController {
      * <strong>接口说明：</strong>
      * <ul>
      *   <li>请求方式：POST</li>
-     *   <li>请求路径：/api/pay-service/callback/alipay</li>
+     *   <li>请求路径：/api/pay-service/refund/alipay</li>
      *   <li>请求参数：支付宝回调通知的参数集合（Map形式）</li>
      *   <li>返回值：无（void）</li>
      * </ul>

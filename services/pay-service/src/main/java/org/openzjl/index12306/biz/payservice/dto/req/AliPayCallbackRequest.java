@@ -9,6 +9,8 @@ import org.openzjl.index12306.biz.payservice.common.enums.PayChannelEnum;
 import org.openzjl.index12306.biz.payservice.dto.base.AbstractPayCallbackRequest;
 import org.openzjl.index12306.biz.payservice.dto.base.PayCallbackRequest;
 
+import java.util.Date;
+
 /**
  * 支付宝回调请求入参
  *
@@ -36,7 +38,7 @@ public class AliPayCallbackRequest extends AbstractPayCallbackRequest {
     /**
      * 买家付款时间
      */
-    private String gmtPayment;
+    private Date gmtPayment;
 
     /**
      * 买家付款金额

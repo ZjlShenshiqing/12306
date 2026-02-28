@@ -8,6 +8,8 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import org.openzjl.index12306.framework.starter.database.base.BaseDO;
 
+import java.util.Date;
+
 /**
  * 支付实体
  *
@@ -67,6 +69,11 @@ public class PayDO extends BaseDO {
      * 订单总金额
      */
     private Integer totalAmount;
+
+    /**
+     * 付款时间
+     */
+    private Date gmtPayment;
 
     /**
      * 实际支付金额

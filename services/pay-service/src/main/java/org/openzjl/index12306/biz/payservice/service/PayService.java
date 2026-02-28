@@ -5,6 +5,7 @@
 package org.openzjl.index12306.biz.payservice.service;
 
 import org.openzjl.index12306.biz.payservice.dto.base.PayRequest;
+import org.openzjl.index12306.biz.payservice.dto.req.PayCallbackReqDTO;
 import org.openzjl.index12306.biz.payservice.dto.resp.PayInfoRespDTO;
 import org.openzjl.index12306.biz.payservice.dto.resp.PayRespDTO;
 
@@ -39,4 +40,10 @@ public interface PayService {
      * @return 支付单详情
      */
     PayInfoRespDTO getPayInfoByPaySn(String paySn);
+
+    /**
+     * 支付单回调
+     * @param payCallbackRequestParam
+     */
+    void callbackPay(PayCallbackReqDTO payCallbackRequestParam);
 }
