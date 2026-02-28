@@ -19,7 +19,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class BaseSendExtendDTO {
+public final class BaseSendExtendDTO {
 
     /**
      * 事件名称
