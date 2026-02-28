@@ -23,24 +23,24 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
-import org.opengoofy.index12306.biz.ticketservice.common.constant.TicketRocketMQConstant;
-import org.opengoofy.index12306.biz.ticketservice.dto.domain.RouteDTO;
-import org.opengoofy.index12306.biz.ticketservice.dto.req.CancelTicketOrderReqDTO;
-import org.opengoofy.index12306.biz.ticketservice.mq.domain.MessageWrapper;
-import org.opengoofy.index12306.biz.ticketservice.mq.event.DelayCloseOrderEvent;
-import org.opengoofy.index12306.biz.ticketservice.remote.TicketOrderRemoteService;
-import org.opengoofy.index12306.biz.ticketservice.remote.dto.TicketOrderDetailRespDTO;
-import org.opengoofy.index12306.biz.ticketservice.remote.dto.TicketOrderPassengerDetailRespDTO;
-import org.opengoofy.index12306.biz.ticketservice.service.SeatService;
-import org.opengoofy.index12306.biz.ticketservice.service.TrainStationService;
-import org.opengoofy.index12306.biz.ticketservice.service.handler.ticket.dto.TrainPurchaseTicketRespDTO;
-import org.opengoofy.index12306.biz.ticketservice.service.handler.ticket.tokenbucket.TicketAvailabilityTokenBucket;
-import org.opengoofy.index12306.framework.starter.cache.DistributedCache;
-import org.opengoofy.index12306.framework.starter.common.toolkit.BeanUtil;
-import org.opengoofy.index12306.framework.starter.convention.result.Result;
-import org.opengoofy.index12306.framework.starter.idempotent.annotation.Idempotent;
-import org.opengoofy.index12306.framework.starter.idempotent.enums.IdempotentSceneEnum;
-import org.opengoofy.index12306.framework.starter.idempotent.enums.IdempotentTypeEnum;
+import org.openzjl.index12306.biz.ticketservice.common.constant.TicketRocketMQConstant;
+import org.openzjl.index12306.biz.ticketservice.dto.domain.RouteDTO;
+import org.openzjl.index12306.biz.ticketservice.dto.req.CancelTicketOrderReqDTO;
+import org.openzjl.index12306.biz.ticketservice.mq.domain.MessageWrapper;
+import org.openzjl.index12306.biz.ticketservice.mq.event.DelayCloseOrderEvent;
+import org.openzjl.index12306.biz.ticketservice.remote.TicketOrderRemoteService;
+import org.openzjl.index12306.biz.ticketservice.remote.dto.TicketOrderDetailRespDTO;
+import org.openzjl.index12306.biz.ticketservice.remote.dto.TicketOrderPassengerDetailRespDTO;
+import org.openzjl.index12306.biz.ticketservice.service.SeatService;
+import org.openzjl.index12306.biz.ticketservice.service.TrainStationService;
+import org.openzjl.index12306.biz.ticketservice.service.handler.ticket.dto.TrainPurchaseTicketRespDTO;
+import org.openzjl.index12306.biz.ticketservice.service.handler.ticket.tokenbucket.TicketAvailabilityTokenBucket;
+import org.openzjl.index12306.framework.starter.cache.DistributedCache;
+import org.openzjl.index12306.framework.starter.convention.result.Result;
+import org.openzjl.index12306.framework.starter.idempotent.annotation.Idempotent;
+import org.openzjl.index12306.framework.starter.idempotent.enums.IdempotentSceneEnum;
+import org.openzjl.index12306.framework.starter.idempotent.enums.IdempotentTypeEnum;
+import org.openzjl.index12306.framework.starter.log.toolkit.BeanUtil;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
@@ -49,11 +49,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.opengoofy.index12306.biz.ticketservice.common.constant.RedisKeyConstant.TRAIN_STATION_REMAINING_TICKET;
+import static org.openzjl.index12306.biz.ticketservice.common.constant.RedisKeyConstant.TRAIN_STATION_REMAINING_TICKET;
 
 /**
  * 延迟关闭订单消费者
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：12306）获取项目资料
+ *
+ * @author zhangjlk
+ * @date 2025/12/15 上午10:20
  */
 @Slf4j
 @Component
@@ -103,7 +105,7 @@ public class DelayCloseOrderConsumer implements RocketMQListener<MessageWrapper<
             String arrival = delayCloseOrderEvent.getArrival();
             List<TrainPurchaseTicketRespDTO> trainPurchaseTicketResults = delayCloseOrderEvent.getTrainPurchaseTicketResults();
             try {
-                seatService.unlock(trainId, departure, arrival, trainPurchaseTicketResults);
+                seatService.unLock(trainId, departure, arrival, trainPurchaseTicketResults);
             } catch (Throwable ex) {
                 log.error("[延迟关闭订单] 订单号：{} 回滚列车DB座位状态失败", orderSn, ex);
                 throw ex;

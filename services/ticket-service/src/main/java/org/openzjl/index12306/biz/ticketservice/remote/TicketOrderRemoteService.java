@@ -9,6 +9,7 @@ import org.openzjl.index12306.framework.starter.convention.result.Result;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.cloud.openfeign.SpringQueryMap;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
@@ -77,5 +78,15 @@ public interface TicketOrderRemoteService {
      * @param requestParam 车票订单取消入参
      * @return 订单取消返回结果
      */
+    @PostMapping("/api/order-service/order/ticket/cancel")
     Result<Void> cancelTicketOrder(@RequestParam CancelTicketOrderReqDTO requestParam);
+
+    /**
+     * 车票订单关闭
+     *
+     * @param cancelTicketOrderReqDTO 车票订单取消入参
+     * @return
+     */
+    @PostMapping("/api/order-service/order/ticket/close")
+    Result<Boolean> closeTickOrder(CancelTicketOrderReqDTO cancelTicketOrderReqDTO);
 }

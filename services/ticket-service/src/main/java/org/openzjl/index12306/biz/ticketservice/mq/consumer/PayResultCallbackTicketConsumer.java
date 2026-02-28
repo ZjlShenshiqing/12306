@@ -23,20 +23,20 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
-import org.opengoofy.index12306.biz.ticketservice.common.constant.TicketRocketMQConstant;
-import org.opengoofy.index12306.biz.ticketservice.common.enums.SeatStatusEnum;
-import org.opengoofy.index12306.biz.ticketservice.dao.entity.SeatDO;
-import org.opengoofy.index12306.biz.ticketservice.dao.mapper.SeatMapper;
-import org.opengoofy.index12306.biz.ticketservice.mq.domain.MessageWrapper;
-import org.opengoofy.index12306.biz.ticketservice.mq.event.PayResultCallbackTicketEvent;
-import org.opengoofy.index12306.biz.ticketservice.remote.TicketOrderRemoteService;
-import org.opengoofy.index12306.biz.ticketservice.remote.dto.TicketOrderDetailRespDTO;
-import org.opengoofy.index12306.biz.ticketservice.remote.dto.TicketOrderPassengerDetailRespDTO;
-import org.opengoofy.index12306.framework.starter.convention.exception.ServiceException;
-import org.opengoofy.index12306.framework.starter.convention.result.Result;
-import org.opengoofy.index12306.framework.starter.idempotent.annotation.Idempotent;
-import org.opengoofy.index12306.framework.starter.idempotent.enums.IdempotentSceneEnum;
-import org.opengoofy.index12306.framework.starter.idempotent.enums.IdempotentTypeEnum;
+import org.openzjl.index12306.biz.ticketservice.common.constant.TicketRocketMQConstant;
+import org.openzjl.index12306.biz.ticketservice.common.enums.SeatStatusEnum;
+import org.openzjl.index12306.biz.ticketservice.dao.entity.SeatDO;
+import org.openzjl.index12306.biz.ticketservice.dao.mapper.SeatMapper;
+import org.openzjl.index12306.biz.ticketservice.mq.domain.MessageWrapper;
+import org.openzjl.index12306.biz.ticketservice.mq.event.PayResultCallbackTicketEvent;
+import org.openzjl.index12306.biz.ticketservice.remote.TicketOrderRemoteService;
+import org.openzjl.index12306.biz.ticketservice.remote.dto.TicketOrderDetailRespDTO;
+import org.openzjl.index12306.biz.ticketservice.remote.dto.TicketOrderPassengerDetailRespDTO;
+import org.openzjl.index12306.framework.starter.convention.exception.ServiceException;
+import org.openzjl.index12306.framework.starter.convention.result.Result;
+import org.openzjl.index12306.framework.starter.idempotent.annotation.Idempotent;
+import org.openzjl.index12306.framework.starter.idempotent.enums.IdempotentSceneEnum;
+import org.openzjl.index12306.framework.starter.idempotent.enums.IdempotentTypeEnum;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,7 +44,9 @@ import java.util.Objects;
 
 /**
  * 支付结果回调购票消费者
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：12306）获取项目资料
+ *
+ * @author zhangjlk
+ * @date 2025/12/15 上午10:20
  */
 @Slf4j
 @Component
@@ -69,7 +71,7 @@ public class PayResultCallbackTicketConsumer implements RocketMQListener<Message
     @Transactional(rollbackFor = Exception.class)
     @Override
     public void onMessage(MessageWrapper<PayResultCallbackTicketEvent> message) {
-        Result<TicketOrderDetailRespDTO> ticketOrderDetailResult;
+        Result<org.openzjl.index12306.biz.ticketservice.remote.dto.TicketOrderDetailRespDTO> ticketOrderDetailResult;
         try {
             ticketOrderDetailResult = ticketOrderRemoteService.queryTicketOrderByOrderSn(message.getMessage().getOrderSn());
             if (!ticketOrderDetailResult.isSuccess() && Objects.isNull(ticketOrderDetailResult.getData())) {
