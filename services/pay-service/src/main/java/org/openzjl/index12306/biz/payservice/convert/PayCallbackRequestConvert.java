@@ -22,7 +22,7 @@ import java.util.Objects;
  * @author zhangjlk
  * @date 2026/1/27 11:57
  */
-public class PayCallbackRequestConvert {
+public final class PayCallbackRequestConvert {
 
     /**
      * 将支付回调命令转换为支付回调请求对象

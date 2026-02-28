@@ -23,7 +23,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class RefundResultCallBackOrderEvent {
+public final class RefundResultCallBackOrderEvent {
 
     /**
      * 订单号
