@@ -100,7 +100,7 @@ public class OrderServiceImpl implements OrderService {
     /**
      * 用户远程服务
      */
-    private UserRemoteService userRemoteService;
+    private final UserRemoteService userRemoteService;
 
     /**
      * 根据订单号查询车票订单详情
