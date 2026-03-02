@@ -50,6 +50,11 @@
             <artifactId>index-12306-cache-spring-boot-starter</artifactId>
             <version>1.0-SNAPSHOT</version>
         </dependency>
+        <!-- 显式引入 Spring Data Redis，供 TicketServiceImpl 中 StringRedisTemplate、RedisCallback 等编译与运行 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>com.zjl</groupId>

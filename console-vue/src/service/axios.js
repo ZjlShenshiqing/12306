@@ -5,9 +5,10 @@ import Cookie from 'js-cookie'
 if (Cookie.get('token')) {
 }
 
+// 开发环境用空 baseURL，走 vue.config.js 的 devServer 代理 /api -> 9000，避免跨域和 Network Error
 const initAxios = Axios.create({
   timeout: 1800000, //数据响应过期时间
-  baseURL: 'http://localhost:9000'
+  baseURL: process.env.NODE_ENV === 'development' ? '' : 'http://localhost:9000'
   // headers: ['Authorization', Cookie.get('token') ?? null]
 })
 
@@ -35,9 +36,12 @@ initAxios.interceptors.response.use(
   },
   (error) => {
     console.log(error, 'error')
-    if (error.response.status === 401) {
+    // 网络错误、连接失败等情况下 error.response 可能为 undefined，需先判断
+    if (error.response?.status === 401) {
       message.error('用户未登录或已过期！')
       window.location.href = 'login'
+    } else if (!error.response) {
+      message.error('网络异常或服务未启动，请检查后端服务是否运行')
     }
     return Promise.reject(error)
   }

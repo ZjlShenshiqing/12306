@@ -1,12 +1,29 @@
 spring:
   cloud:
     gateway:
+      # 允许前端（如 localhost:8081）跨域访问网关
+      globalcors:
+        add-to-simple-url-handler-mapping: true
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:8080"
+              - "http://localhost:8081"
+              - "http://127.0.0.1:8080"
+              - "http://127.0.0.1:8081"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
       routes:
         - id: index12306-user-service
-
-          # - 使用 lb:// 前缀表示通过服务发现（如 Nacos、Eureka）进行负载均衡调用
-          # 路径拼接逻辑：Spring Cloud Gateway 默认会将 Path predicate 中匹配的路径（如 /api/user-service/xxx）完整地附加到 uri 指定的基础路径之后。但
-          uri: lb://index12306-user${unique-name:}-service/api/user-service/**
+          # lb:// 仅跟服务名，路径会按原样转发到下游
+          uri: lb://index12306-user${unique-name:}-service
 
           # 路由匹配条件：只有请求路径匹配以下规则时，才应用此路由
           predicates:
@@ -30,24 +47,25 @@ spring:
 
 
         - id: index12306-ticket-service
-          uri: lb://index12306-ticket${unique-name:}-service/api/ticket-service/**
+          uri: lb://index12306-ticket${unique-name:}-service
           predicates:
             - Path=/api/ticket-service/**
           filters:
             - name: TokenValidate
               args:
                 blackPathPre:
+                  - /api/ticket-service/ticket/query
                   - /api/ticket-service/ticket/purchase
                   - /api/ticket-service/ticket/pay/query
                   - /api/ticket-service/ticket/cancel
 
         - id: index12306-pay-service
-          uri: lb://index12306-pay${unique-name:}-service/api/pay-service/**
+          uri: lb://index12306-pay${unique-name:}-service
           predicates:
             - Path=/api/pay-service/**
 
         - id: index12306-order-service
-          uri: lb://index12306-order${unique-name:}-service/api/order-service/**
+          uri: lb://index12306-order${unique-name:}-service
           predicates:
             - Path=/api/order-service/**
           filters:
