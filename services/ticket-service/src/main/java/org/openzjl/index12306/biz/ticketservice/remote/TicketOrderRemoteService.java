@@ -34,6 +34,7 @@ public interface TicketOrderRemoteService {
      * @param orderSn 订单号
      * @return 列车订单记录
      */
+    @GetMapping("/api/order-service/order/item/ticket/query")
     Result<TicketOrderDetailRespDTO> queryTicketOrderByOrderSn(@RequestParam(value = "orderSn") String orderSn);
 
     /**
@@ -43,8 +44,8 @@ public interface TicketOrderRemoteService {
      * @return 子订单详情
      */
     // @SpringQueryMap 注解会将对象参数转换为 URL 查询参数
-    // 例如：GET /api/ticket-order/query-item?orderSn=ORDER123&orderItemRecordIds=ITEM1&orderItemRecordIds=ITEM2
-    // 这样可以将对象的所有字段自动转换为查询参数，无需手动拼接 URL
+    // 例如：GET /api/order-service/order/ticket/query?orderSn=ORDER123&orderItemRecordIds=ITEM1&orderItemRecordIds=ITEM2
+    @GetMapping("/api/order-service/order/ticket/query")
     Result<List<TicketOrderPassengerDetailRespDTO>> queryTicketItemOrderById(@SpringQueryMap TicketOrderItemQueryReqDTO requestParam);
 
     /**
@@ -53,25 +54,11 @@ public interface TicketOrderRemoteService {
      * 业务场景：
      * 当用户在购票服务中选择车票并确认购买后，购票服务会调用订单服务创建订单
      * 订单服务会生成订单号、保存订单信息、锁定车票库存等
-     * 
-     * 请求参数包含：
-     * - 用户信息：用户ID、用户名
-     * - 车次信息：车次ID、车次号、出发地、到达地
-     * - 时间信息：出发时间、到达时间、乘车日期、订单创建时间
-     * - 订单明细：每个乘客的车票信息（车厢号、座位号、乘客信息、金额等）
-     * 
-     * 返回结果：
-     * - 成功：返回订单号（String类型）
-     * - 失败：返回错误信息
-     * 
-     * 注意：
-     * - 当前使用 @GetMapping 但参数为 @RequestBody，实际应该是 POST 请求
-     * - 建议修改为 @PostMapping 以符合RESTful规范
      *
      * @param requestParam 创建车票订单请求参数，包含用户信息、车次信息、订单明细等
      * @return 订单创建结果，成功时返回订单号，失败时返回错误信息
      */
-    @GetMapping("/api/order-service/order/ticket/create")
+    @PostMapping("/api/order-service/order/ticket/create")
     Result<String> createTicketOrder(@RequestBody TicketOrderCreateRemoteReqDTO requestParam);
 
 
@@ -83,14 +70,14 @@ public interface TicketOrderRemoteService {
      * @return 订单取消返回结果
      */
     @PostMapping("/api/order-service/order/ticket/cancel")
-    Result<Void> cancelTicketOrder(@RequestParam CancelTicketOrderReqDTO requestParam);
+    Result<Void> cancelTicketOrder(@RequestBody CancelTicketOrderReqDTO requestParam);
 
     /**
      * 车票订单关闭
      *
      * @param cancelTicketOrderReqDTO 车票订单取消入参
-     * @return
+     * @return 关闭结果
      */
     @PostMapping("/api/order-service/order/ticket/close")
-    Result<Boolean> closeTickOrder(CancelTicketOrderReqDTO cancelTicketOrderReqDTO);
+    Result<Boolean> closeTickOrder(@RequestBody CancelTicketOrderReqDTO cancelTicketOrderReqDTO);
 }

@@ -18,6 +18,7 @@ import org.openzjl.index12306.biz.orderservice.service.OrderService;
 import org.openzjl.index12306.framework.starter.idempotent.annotation.Idempotent;
 import org.openzjl.index12306.framework.starter.idempotent.enums.IdempotentSceneEnum;
 import org.openzjl.index12306.framework.starter.idempotent.enums.IdempotentTypeEnum;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
