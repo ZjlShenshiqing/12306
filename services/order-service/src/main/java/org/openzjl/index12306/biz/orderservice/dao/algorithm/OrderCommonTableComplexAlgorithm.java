@@ -9,25 +9,26 @@ import org.apache.shardingsphere.sharding.api.sharding.complex.ComplexKeysShardi
 import org.apache.shardingsphere.sharding.api.sharding.complex.ComplexKeysShardingValue;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.Properties;
 
 /**
- * 订单数据库复合分片算法配置
+ * 订单表复合分片算法配置
+ * <p>
+ * 当前实现为“广播到所有表分片”的兜底策略：直接返回所有可用表名，不做真实路由计算，
+ * 主要目的是避免 ClassNotFound 异常导致数据源初始化失败，后续可按业务需要补充真实分片逻辑。
+ * </p>
  *
  * @author zhangjlk
- * @date 2026/2/6 下午9:40
+ * @date 2026/3/3
  */
-public class OrderCommonDataBaseComplexAlgorithm implements ComplexKeysShardingAlgorithm {
+public class OrderCommonTableComplexAlgorithm implements ComplexKeysShardingAlgorithm {
 
     @Getter
     private Properties props;
 
     private int shardingCount;
-    private int tableShardingCount;
 
-    private static final String SHARDING_COUNT_KEY = "sharding_count";
-    private static final String TABLE_SHARDING_COUNT_KEY = "table_sharding-count";
+    private static final String SHARDING_COUNT_KEY = "sharding-count";
 
     @Override
     public void init(Properties props) {
@@ -38,13 +39,7 @@ public class OrderCommonDataBaseComplexAlgorithm implements ComplexKeysShardingA
                 try {
                     shardingCount = Integer.parseInt(shardingCountProp);
                 } catch (NumberFormatException ignored) {
-                }
-            }
-            String tableShardingCountProp = props.getProperty(TABLE_SHARDING_COUNT_KEY);
-            if (tableShardingCountProp != null) {
-                try {
-                    tableShardingCount = Integer.parseInt(tableShardingCountProp);
-                } catch (NumberFormatException ignored) {
+                    // 保底策略：解析失败时保持默认值，不影响数据源启动
                 }
             }
         }
@@ -58,15 +53,12 @@ public class OrderCommonDataBaseComplexAlgorithm implements ComplexKeysShardingA
     @Override
     @SuppressWarnings("unchecked")
     public Collection<String> doSharding(Collection collection, ComplexKeysShardingValue complexKeysShardingValue) {
-        // 兜底实现：暂时直接返回所有可用数据源名称，等同于不做库级分片路由，交由 ShardingSphere 广播执行
+        // 兜底实现：暂时不做精确路由，直接返回所有可用表名，让 ShardingSphere 自行广播执行
         return collection;
     }
 
     public int getShardingCount() {
         return shardingCount;
     }
-
-    public int getTableShardingCount() {
-        return tableShardingCount;
-    }
 }
+
