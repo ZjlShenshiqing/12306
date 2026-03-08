@@ -454,14 +454,6 @@ public class UserLoginServiceImpl implements UserLoginService {
      *     <li>用户名复用表（UserReuseDO）：存储可复用的用户名。</li>
      * </ul>
      *
-     * <p>注意事项：</p>
-     * <ul>
-     *     <li>使用 {@code @Transactional} 注解，任何步骤失败都会回滚所有数据库操作。</li>
-     *     <li>使用软删除机制，不物理删除数据，保留历史记录。</li>
-     *     <li>注销后用户名可以复用，但需要等待一定时间（由业务规则决定）。</li>
-     *     <li>同一身份证号不能重复注册（通过注销表校验）。</li>
-     * </ul>
-     *
      * @param requestParam 用户注销请求参数（包含用户名）
      * @throws ServiceException 当用户身份验证失败时抛出
      */

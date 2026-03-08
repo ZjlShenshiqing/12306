@@ -27,9 +27,10 @@ public class TicketController {
 
     /**
      * 分页查询车票（前端 /api/ticket-service/ticket/query 调用）
+     * 使用 V1：缓存为空时会从 DB 加载并回填 Redis（站点→地区映射、地区对车次列表），避免查不到车次。
      */
     @GetMapping("/api/ticket-service/ticket/query")
     public Result<TicketPageQueryRespDTO> pageListTicketQuery(TicketPageQueryReqDTO requestParam) {
-        return Results.success(ticketService.pageListTicketQueryV2(requestParam));
+        return Results.success(ticketService.pageListTicketQueryV1(requestParam));
     }
 }

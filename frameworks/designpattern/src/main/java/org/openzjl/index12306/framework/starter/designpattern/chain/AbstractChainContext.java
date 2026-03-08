@@ -46,22 +46,28 @@ public final class AbstractChainContext<T> implements CommandLineRunner {
     }
 
     /**
-     * 填充Bean集合
+     * Spring 启动完成后执行：从容器中收集所有责任链 Handler，按 mark 分组、组内按 order 排序后放入 abstractChainHandlerContainer，
+     * 供后续 handler(mark, requestParam) 按链执行。
      */
     @Override
     public void run(String... args) throws Exception {
-        // 拿到所有标注了bean的责任链执行类
+        // 从 Spring 容器中取出所有实现了 AbstractChainHandler 的 Bean（如用户注册 3 个、购票/退款等各链的 Handler）
         Map<String, AbstractChainHandler> chainFilterMap = ApplicationContextHolder
                 .getBeansOfType(AbstractChainHandler.class);
+
         chainFilterMap.forEach((beanName, bean) -> {
+            // 用当前 Bean 的 mark() 作为“链标识”，取出该链已有的 Handler 列表（可能为空）
             List<AbstractChainHandler> abstractChainHandlers = abstractChainHandlerContainer.get(bean.mark());
             if (CollectionUtils.isEmpty(abstractChainHandlers)) {
                 abstractChainHandlers = new ArrayList<>();
             }
+            // 把当前 Bean 加入这条链
             abstractChainHandlers.add(bean);
+            // 按 getOrder() 升序排序，保证链内执行顺序（0 → 1 → 2 …）
             List<AbstractChainHandler> actualAbstractChanHandlers = abstractChainHandlers.stream()
                     .sorted(Comparator.comparing(Ordered::getOrder))
                     .collect(Collectors.toList());
+            // 将排好序的链写回 Map：key = mark，value = 该链的 Handler 有序列表
             abstractChainHandlerContainer.put(bean.mark(), actualAbstractChanHandlers);
         });
     }
