@@ -261,7 +261,6 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
         // 初始化车票结果列表，用于存储查询到的车票信息
         // 用户查询，列出所有适合的车次
         List<TicketListDTO> ticketResult = new ArrayList<>();
-        
         // 构建地区列车站点缓存的Redis Hash Key
         // 格式：REGION_TRAIN_STATION + 出发地区 + 到达地区
         // 例如：index12306-ticket-service:region_train_station:华北:华东
@@ -283,7 +282,7 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
                 // 第二次检查缓存
                 // 双重检查：获取锁后再次检查缓存，可能其他线程已经加载完成
                 regionTrainStationAllMap = stringRedisTemplate.opsForHash().entries(buildRegionTrainStationHashKey);
-                
+
                 // 如果第二次检查仍然为空，说明确实需要从数据库加载
                 if (MapUtil.isEmpty(regionTrainStationAllMap)) {
                     // 从数据库查询列车站点关系
@@ -295,7 +294,7 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
 
                     // 执行数据库查询，获取所有符合条件的列车站点关系
                     List<TrainStationRelationDO> trainStationRelationList = trainStationRelationMapper.selectList(query);
-                    
+
                     // 遍历查询结果，构建车票列表DTO
                     for (TrainStationRelationDO trainStationRelation : trainStationRelationList) {
                         // 从缓存或数据库获取列车基本信息
@@ -306,14 +305,14 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
                                 () -> trainMapper.selectById(trainStationRelation.getTrainId()),
                                 ADVANCE_TICKET_DAY,
                                 TimeUnit.DAYS);
-                        
+
                         // 创建车票列表DTO对象，用于封装返回给前端的数据
                         TicketListDTO result = new TicketListDTO();
-                        
+
                         // 设置车次基本信息
                         result.setTrainId(String.valueOf(trainDO.getId()));              // 车次ID
                         result.setTrainNumber(trainDO.getTrainNumber());                 // 车次号（如：G123）
-                        
+
                         // 设置时间信息
                         // 出发时间：将Date转换为"HH:mm"格式（如：08:30）
                         result.setDepartureTime(convertDateToLocalTime(trainStationRelation.getDepartureTime(), "HH:mm"));
@@ -321,50 +320,50 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
                         result.setArrivalTime(convertDateToLocalTime(trainStationRelation.getArrivalTime(), "HH:mm"));
                         // 运行时长：计算出发时间到到达时间的差值（如：06:00 表示6小时）
                         result.setDuration(DateUtil.calculateHourDifference(trainStationRelation.getDepartureTime(), trainStationRelation.getArrivalTime()));
-                        
+
                         // 设置站点信息
                         result.setDeparture(trainStationRelation.getDeparture());        // 出发站编码
                         result.setArrival(trainStationRelation.getArrival());            // 到达站编码
                         result.setDepartureFlag(trainStationRelation.getDepartureFlag()); // 是否为始发站
                         result.setArrivalFlag(trainStationRelation.getArrivalFlag());    // 是否为终点站
-                        
+
                         // 设置列车类型和品牌信息
                         result.setTrainType(trainDO.getTrainType());                     // 列车类型（如：高速铁路、动车等）
                         result.setTrainBrand(trainDO.getTrainBrand());                   // 列车车次类型
-                        
+
                         // 设置列车标签（如果有）
                         // 如果列车有标签（如："高铁","直达"），按逗号分割成数组
                         if (StrUtil.isNotBlank(trainDO.getTrainTag())) {
                             result.setTrainTags(StrUtil.split(trainDO.getTrainTag(), ","));
                         }
-                        
+
                         // 计算到达天数
                         // 计算列车始发时间到该站点出发时间的天数差
                         // 例如：列车10月1日始发，该站点10月2日出发，则返回1（表示第二天到达）
                         long betweenDay = cn.hutool.core.date.DateUtil.betweenDay(trainDO.getDepartureTime(), trainStationRelation.getDepartureTime(), false);
                         result.setDaysArrived((int) betweenDay);
-                        
+
                         // 设置售票状态
                         // 如果当前时间晚于开售时间，则状态为0（可售），否则为1（未开售）
                         result.setSaleStatus(new Date().after(trainDO.getSaleTime()) ? 0 : 1);
-                        
+
                         // 设置开售时间：将Date转换为"MM-dd HH:mm"格式（如：12-25 08:00）
                         result.setSaleTime(convertDateToLocalTime(trainDO.getSaleTime(), "MM-dd HH:mm"));
-                        
+
                         // 将构建好的车票信息添加到结果列表
                         ticketResult.add(result);
-                        
+
                         // 将车票信息存入缓存Map，Key格式：车次ID_出发站_到达站
                         // Value：车票信息的JSON字符串
                         // 这样后续查询相同路线时可以直接从缓存获取，无需访问数据库
                         regionTrainStationAllMap.put(
-                                CacheUtil.buildKey(String.valueOf(trainStationRelation.getTrainId()), 
-                                                  trainStationRelation.getDeparture(), 
-                                                  trainStationRelation.getArrival()), 
+                                CacheUtil.buildKey(String.valueOf(trainStationRelation.getTrainId()),
+                                        trainStationRelation.getDeparture(),
+                                        trainStationRelation.getArrival()),
                                 JSON.toJSONString(result)
                         );
                     }
-                    
+
                     // 将查询结果批量写入Redis缓存
                     // 使用putAll方法一次性将所有车票信息写入Redis Hash
                     // 这样后续查询相同地区对的车票时，可以直接从缓存获取，大幅提升查询性能
@@ -374,7 +373,7 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
                 // 无论成功与否，都要释放锁，避免死锁
                 lock.unlock();
             }
-
+        }
             // 处理缓存结果
             // 如果ticketResult为空（说明是从缓存读取的），需要从regionTrainStationAllMap中解析JSON字符串
             // 如果ticketResult不为空（说明是从数据库查询的），直接使用已有的结果
@@ -480,8 +479,7 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
                 // 这样前端就可以显示每种座位类型的价格和余票信息
                 each.setSeatClassList(seatClassList);
             }
-        }
-        
+
         // 构建并返回查询结果
         // 将查询到的车票列表封装为响应对象返回给前端
         return TicketPageQueryRespDTO.builder()
