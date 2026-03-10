@@ -12,10 +12,13 @@ const initAxios = Axios.create({
   // headers: ['Authorization', Cookie.get('token') ?? null]
 })
 
-//请求拦截器
+//请求拦截器：每次请求都带上登录态，避免刷新后 UserContext 为空导致乘车人保存/查询异常
 initAxios.interceptors.request.use(
   (config) => {
-    //在发送之前做点什么
+    const token = Cookie.get('token')
+    if (token) {
+      config.headers.Authorization = token
+    }
     return config
   },
   (error) => {

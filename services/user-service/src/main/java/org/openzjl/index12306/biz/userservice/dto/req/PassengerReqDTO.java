@@ -44,4 +44,9 @@ public class PassengerReqDTO {
      * 手机号
      */
     private String phone;
+
+    /**
+     * 用户名（可选，网关未传 UserContext 时从请求体取，用于与当前用户绑定）
+     */
+    private String username;
 }
