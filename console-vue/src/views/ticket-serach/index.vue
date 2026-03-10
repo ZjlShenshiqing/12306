@@ -460,20 +460,18 @@ const handSubmit = () => {
       departureDate: departureDate.format('YYYY-MM-DD')
     }).then((res) => {
       if (!res.success) return message.error(res.message)
-      if (res.data.trainList) {
-        state.trainList = res.data.trainList?.map((item) => ({
-          ...item,
-          key: item.trainId
-        }))
-        rowState.rawTrainList = res.data.trainList?.map((item) => ({
-          ...item,
-          key: item.trainId
-        }))
+      const list = res.data?.ticketList ?? res.data?.trainList ?? []
+      if (list.length) {
+        state.trainList = list.map((item) => ({ ...item, key: item.trainId }))
+        rowState.rawTrainList = list.map((item) => ({ ...item, key: item.trainId }))
+      } else {
+        state.trainList = []
+        rowState.rawTrainList = []
       }
-      state.trainBrandListSelect = res.data.trainBrandList
-      state.seatClassTypeListSelect = res.data.seatClassTypeList
-      currCityStations.value = res.data.departureStationList
-      currArrivalStations.value = res.data.arrivalStationList
+      state.trainBrandListSelect = res.data?.trainBrandList ?? []
+      state.seatClassTypeListSelect = res.data?.seatClassTypeList ?? []
+      currCityStations.value = res.data?.departureStationList ?? []
+      currArrivalStations.value = res.data?.arrivalStationList ?? []
     })
   })
 }
@@ -508,20 +506,18 @@ onMounted(() => {
     departureDate: dayjs(new Date()).format('YYYY-MM-DD')
   }).then((res) => {
     if (!res.success) return message.error(res.message)
-    if (res.data.trainList) {
-      state.trainList = res.data.trainList?.map((item) => ({
-        ...item,
-        key: item.trainId
-      }))
-      rowState.rawTrainList = res.data.trainList?.map((item) => ({
-        ...item,
-        key: item.trainId
-      }))
+    const list = res.data?.ticketList ?? res.data?.trainList ?? []
+    if (list.length) {
+      state.trainList = list.map((item) => ({ ...item, key: item.trainId }))
+      rowState.rawTrainList = list.map((item) => ({ ...item, key: item.trainId }))
+    } else {
+      state.trainList = []
+      rowState.rawTrainList = []
     }
-    state.trainBrandListSelect = res.data.trainBrandList
-    state.seatClassTypeListSelect = res.data.seatClassTypeList
-    currCityStations.value = res.data.departureStationList
-    currArrivalStations.value = res.data.arrivalStationList
+    state.trainBrandListSelect = res.data?.trainBrandList ?? []
+    state.seatClassTypeListSelect = res.data?.seatClassTypeList ?? []
+    currCityStations.value = res.data?.departureStationList ?? []
+    currArrivalStations.value = res.data?.arrivalStationList ?? []
   })
   getStationAll()
 })

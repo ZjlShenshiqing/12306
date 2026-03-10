@@ -422,24 +422,28 @@ onMounted(() => {
     departureDate: query.departureDate
   }).then((res) => {
     if (res.success) {
-      const currTrain = res.data.trainList.find(
+      const list = res.data?.ticketList ?? res.data?.trainList ?? []
+      const currTrain = list.find(
         (item) => item.trainNumber === query.trainNumber
       )
-      state.currentSeat = currTrain.seatClassList
-      state.currTrain = currTrain
+      if (currTrain) {
+        state.currentSeat = currTrain.seatClassList ?? []
+        state.currTrain = currTrain
+      }
     }
   })
   fetchPassengerList({ username }).then((res) => {
     if (res.success) {
-      state.currPassengerList = res.data ?? []
-      state.dataSource = res.data?.map((item, index) => ({
+      const list = res.data ?? []
+      state.currPassengerList = list
+      state.dataSource = Array.isArray(list) ? list.map((item, index) => ({
         ...item,
         keyNumber: index + 1
-      }))
-      state.rawDataSource = res.data?.map((item, index) => ({
+      })) : []
+      state.rawDataSource = Array.isArray(list) ? list.map((item, index) => ({
         ...item,
         keyNumber: index + 1
-      }))
+      })) : []
     }
   })
 })
@@ -567,31 +571,36 @@ const handleDelete = (id) => {
 
 const handleChooseSeat = (id, value) => {
   let cIndex
-  state.dataSource.find((item, index) => {
+  ;(state.dataSource ?? []).find((item, index) => {
     if (item.id === id) {
       cIndex = index
       return true
     }
   })
-  state.dataSource[cIndex]['seatType'] = value
+  if (cIndex !== undefined && state.dataSource?.[cIndex]) {
+    state.dataSource[cIndex]['seatType'] = value
+  }
 }
 
 const handleChooseTicketType = (id, value) => {
   let cIndex
-  state.dataSource.find((item, index) => {
+  ;(state.dataSource ?? []).find((item, index) => {
     if (item.id === id) {
       cIndex = index
       return true
     }
   })
-  state.dataSource[cIndex]['idType'] = value
+  if (cIndex !== undefined && state.dataSource?.[cIndex]) {
+    state.dataSource[cIndex]['idType'] = value
+  }
 }
 
 const handleSubmit = () => {
-  const canNotSubmit = state.dataSource.some(
+  const list = state.dataSource ?? []
+  const canNotSubmit = list.some(
     (item) => item.seatType === null || item.seatType === undefined
   )
-  if (canNotSubmit || state.dataSource?.length === 0) {
+  if (canNotSubmit || list.length === 0) {
     return message.error('请补全信息')
   }
   state.open = true

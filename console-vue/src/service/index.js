@@ -71,11 +71,12 @@ const fetchEditPassenger = async (body) => {
   })
   return data
 }
-const fetchLogout = async (body) => {
+const fetchLogout = async (tokenOrBody) => {
+  const accessToken = typeof tokenOrBody === 'string' ? tokenOrBody : tokenOrBody?.accessToken
   const { data } = await http({
     method: 'GET',
     url: '/api/user-service/logout',
-    data: body
+    params: { accessToken }
   })
   http.defaults.headers.common['Authorization'] = null
   return data
