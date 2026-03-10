@@ -39,6 +39,7 @@ spring:
                 # 放在这里的路径，即使用户没有登录，也可以访问。
                 # blackPathPre 表示“免 Token 验证”的路径前缀列表（即白名单）
                 # 以下路径开头的请求将跳过 Token 验证
+                # 以下路径需要带 Token 才放行；登录/注册不加在这里，即无需 Token
                 blackPathPre:
                   - /api/user-service/passenger
                   - /api/user-service/query
