@@ -1090,6 +1090,7 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
                         .amount(each.getAmount())                    // 车票金额（分）
                         .carriageNumber(each.getCarriageNumber())    // 车厢号
                         .seatNumber(each.getSeatNumber())            // 座位号
+                        .passengerId(each.getPassengerId())          // 乘车人ID
                         .idCard(each.getIdCard())                    // 身份证号
                         .idType(each.getIdType())                    // 证件类型
                         .phone(each.getPhone())                      // 手机号
@@ -1126,6 +1127,9 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
             
             // 构建订单创建请求DTO（用于远程调用订单服务）
             // 包含订单的所有信息：出发站、到达站、车次、时间、乘客信息等
+            if (StrUtil.isBlank(UserContext.getUserId()) || StrUtil.isBlank(UserContext.getUserName())) {
+                throw new ServiceException("用户未登录或登录已过期");
+            }
             TicketOrderCreateRemoteReqDTO orderCreateRemoteReqDTO = TicketOrderCreateRemoteReqDTO.builder()
                     .departure(requestParam.getDeparture())                                          // 出发站编码
                     .arrival(requestParam.getArrival())                                              // 到达站编码
@@ -1135,7 +1139,8 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
                     .departureTime(trainStationRelationDO.getDepartureTime())                        // 出发时间
                     .arrivalTime(trainStationRelationDO.getArrivalTime())                            // 到达时间
                     .ridingDate(trainStationRelationDO.getDepartureTime())                            // 乘车日期（使用出发时间）
-                    .userId(UserContext.getUserId())                                                 // 用户ID
+                    .userId(Long.valueOf(UserContext.getUserId()))                                   // 用户ID
+                    .username(UserContext.getUserName())                                             // 用户名
                     .trainId(Long.parseLong(requestParam.getTrainId()))                              // 车次ID
                     .ticketOrderItems(orderItemCreateRemoteReqDTOList)                                // 订单项列表
                     .build();

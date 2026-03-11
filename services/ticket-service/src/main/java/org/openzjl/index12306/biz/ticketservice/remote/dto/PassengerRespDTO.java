@@ -4,6 +4,7 @@
  */
 package org.openzjl.index12306.biz.ticketservice.remote.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
@@ -26,7 +27,8 @@ public class PassengerRespDTO {
     /**
      * 用户名
      */
-    private String userName;
+    @JsonAlias({"username", "userName"})
+    private String username;
 
     /**
      * 真实姓名
@@ -59,7 +61,8 @@ public class PassengerRespDTO {
     /**
      * 添加日期
      */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    // user-service 的 inner 接口返回格式为 yyyy-MM-dd
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private Date createDate;
 
     /**

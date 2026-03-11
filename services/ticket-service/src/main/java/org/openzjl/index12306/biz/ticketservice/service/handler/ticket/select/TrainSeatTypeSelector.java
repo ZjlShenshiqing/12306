@@ -46,7 +46,7 @@ public class TrainSeatTypeSelector {
     private final SeatService seatService;
     private final UserRemoteService userRemoteService;
     private final AbstractStrategyChoose abstractStrategyChoose;
-    private TrainStationPriceMapper trainStationPriceMapper;
+    private final TrainStationPriceMapper trainStationPriceMapper;
     private final ThreadPoolExecutor selectSeatThreadPoolExecutor;
 
     /**

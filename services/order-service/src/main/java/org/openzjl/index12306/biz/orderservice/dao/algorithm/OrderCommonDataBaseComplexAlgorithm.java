@@ -9,8 +9,10 @@ import org.apache.shardingsphere.sharding.api.sharding.complex.ComplexKeysShardi
 import org.apache.shardingsphere.sharding.api.sharding.complex.ComplexKeysShardingValue;
 
 import java.util.Collection;
-import java.util.List;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 /**
  * 订单数据库复合分片算法配置
@@ -18,7 +20,7 @@ import java.util.Properties;
  * @author zhangjlk
  * @date 2026/2/6 下午9:40
  */
-public class OrderCommonDataBaseComplexAlgorithm implements ComplexKeysShardingAlgorithm {
+public class OrderCommonDataBaseComplexAlgorithm implements ComplexKeysShardingAlgorithm<Comparable<?>> {
 
     @Getter
     private Properties props;
@@ -26,8 +28,11 @@ public class OrderCommonDataBaseComplexAlgorithm implements ComplexKeysShardingA
     private int shardingCount;
     private int tableShardingCount;
 
-    private static final String SHARDING_COUNT_KEY = "sharding_count";
-    private static final String TABLE_SHARDING_COUNT_KEY = "table_sharding-count";
+    private static final String SHARDING_COUNT_KEY = "sharding-count";
+    private static final String TABLE_SHARDING_COUNT_KEY = "table-sharding-count";
+
+    private static final String USER_ID_COL = "user_id";
+    private static final String ORDER_SN_COL = "order_sn";
 
     @Override
     public void init(Properties props) {
@@ -56,10 +61,51 @@ public class OrderCommonDataBaseComplexAlgorithm implements ComplexKeysShardingA
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public Collection<String> doSharding(Collection collection, ComplexKeysShardingValue complexKeysShardingValue) {
-        // 兜底实现：暂时直接返回所有可用数据源名称，等同于不做库级分片路由，交由 ShardingSphere 广播执行
-        return collection;
+    public Collection<String> doSharding(Collection<String> availableTargetNames, ComplexKeysShardingValue<Comparable<?>> complexKeysShardingValue) {
+        if (availableTargetNames == null || availableTargetNames.isEmpty() || complexKeysShardingValue == null) {
+            return availableTargetNames;
+        }
+        Object shardingValue = getShardingValue(complexKeysShardingValue);
+        if (shardingValue == null) {
+            // 无分片键时只能广播，但 INSERT 不允许；这里保守返回全部，交给上层报错提示
+            return availableTargetNames;
+        }
+        // 参考 CustomDbHashModShardingAlgorithm：
+        // suffix = hash(value) % shardingCount / tableShardingCount
+        long hash = Math.abs((long) shardingValue.hashCode());
+        String suffix = String.valueOf(hash % shardingCount / Math.max(tableShardingCount, 1));
+        for (String name : availableTargetNames) {
+            if (name.endsWith("_" + suffix) || name.endsWith(suffix)) {
+                return Collections.singleton(name);
+            }
+        }
+        // 找不到则回退到全部（让上层按 ShardingSphere 默认行为处理）
+        return availableTargetNames;
+    }
+
+    private Object getShardingValue(ComplexKeysShardingValue<Comparable<?>> complexKeysShardingValue) {
+        Map<String, Collection<Comparable<?>>> map = complexKeysShardingValue.getColumnNameAndShardingValuesMap();
+        if (map == null || map.isEmpty()) {
+            return null;
+        }
+        // 优先用 user_id，其次 order_sn
+        Object userId = firstValue(map, USER_ID_COL);
+        if (userId != null) {
+            return userId;
+        }
+        return firstValue(map, ORDER_SN_COL);
+    }
+
+    private Object firstValue(Map<String, Collection<Comparable<?>>> map, String key) {
+        Set<Map.Entry<String, Collection<Comparable<?>>>> entries = map.entrySet();
+        for (Map.Entry<String, Collection<Comparable<?>>> entry : entries) {
+            if (entry.getKey() != null && entry.getKey().equalsIgnoreCase(key) && entry.getValue() != null) {
+                for (Comparable<?> v : entry.getValue()) {
+                    return v;
+                }
+            }
+        }
+        return null;
     }
 
     public int getShardingCount() {

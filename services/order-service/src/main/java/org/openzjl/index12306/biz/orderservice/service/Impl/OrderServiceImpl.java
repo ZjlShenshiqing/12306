@@ -306,13 +306,11 @@ public class OrderServiceImpl implements OrderService {
             SendResult sendResult = delayCloseOrderSendProduce.sendMessage(delayCloseOrderEvent);
             // 校验消息发送结果，如果发送失败则抛出异常
             if (!Objects.equals(sendResult.getSendStatus(), SendStatus.SEND_OK)) {
-                throw new ServiceException("投递延迟关闭订单消息队列失败");
+                log.warn("投递延迟关闭订单消息队列失败，sendStatus={}，requestParam={}", sendResult.getSendStatus(), JSON.toJSONString(requestParam));
             }
         } catch (Throwable ex) {
-            // 记录错误日志，包含请求参数和异常信息
-            log.error("延迟关闭订单消息队列发送错误，请求参数：{}", JSON.toJSONString(requestParam), ex);
-            // 重新抛出异常，让调用方处理
-            throw ex;
+            // 本地/开发环境可能未启动 RocketMQ 或 Topic 未创建；不应影响下单主流程
+            log.warn("延迟关闭订单消息队列发送异常（不影响下单），requestParam={}", JSON.toJSONString(requestParam), ex);
         }
         
         // 返回订单号，供调用方使用（如：用于支付、查询等）

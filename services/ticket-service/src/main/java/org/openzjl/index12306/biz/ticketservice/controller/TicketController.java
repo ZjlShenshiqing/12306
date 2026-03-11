@@ -5,12 +5,16 @@
 package org.openzjl.index12306.biz.ticketservice.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.openzjl.index12306.biz.ticketservice.dto.req.PurchaseTicketReqDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.req.TicketPageQueryReqDTO;
 import org.openzjl.index12306.biz.ticketservice.dto.resp.TicketPageQueryRespDTO;
+import org.openzjl.index12306.biz.ticketservice.dto.resp.TicketPurchaseRespDTO;
 import org.openzjl.index12306.biz.ticketservice.service.TicketService;
 import org.openzjl.index12306.framework.starter.convention.result.Result;
 import org.openzjl.index12306.framework.starter.web.Results;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -32,5 +36,14 @@ public class TicketController {
     @GetMapping("/api/ticket-service/ticket/query")
     public Result<TicketPageQueryRespDTO> pageListTicketQuery(TicketPageQueryReqDTO requestParam) {
         return Results.success(ticketService.pageListTicketQueryV1(requestParam));
+    }
+
+    /**
+     * 购买车票（高性能版本）
+     * 前端确认下单：POST /api/ticket-service/ticket/purchase/v2
+     */
+    @PostMapping("/api/ticket-service/ticket/purchase/v2")
+    public Result<TicketPurchaseRespDTO> purchaseTicketV2(@RequestBody PurchaseTicketReqDTO requestParam) {
+        return Results.success(ticketService.purchaseTicketsV2(requestParam));
     }
 }

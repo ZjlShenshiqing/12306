@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="org.openzjl.index12306.biz.ticketservice.dao.entity.SeatDO">
+<!-- namespace 必须是 Mapper 接口全限定名，否则会出现 BindingException: Invalid bound statement -->
+<mapper namespace="org.openzjl.index12306.biz.ticketservice.dao.mapper.SeatMapper">
 
-    <select id="listSeatRemainingTicket" parameterType="org.openzjl.index12306.biz.ticketservice.dao.entity.SeatDO"
-            resultType="Integer">
+    <select id="listSeatRemainingTicket" resultType="Integer">
         select count(*) as count
         from t_seat
         where train_id = #{seatDO.trainId}
         and start_station = #{seatDO.startStation}
         and end_station = #{seatDO.endStation}
-        and seat_status = '0'
+        and seat_status = 0
         and carriage_number in
         <foreach collection="trainCarriageList" item="carriage" open="(" separator="," close=")">
             #{carriage}
@@ -23,7 +23,7 @@
         where train_id = #{trainId}
           and start_station = #{startStation}
           and end_station = #{endStation}
-          and seat_status = '0'
+          and seat_status = 0
           and seat_type in
         <foreach collection="seatTypes" item="seatType" open="(" separator="," close=")" >
             #{seatType}

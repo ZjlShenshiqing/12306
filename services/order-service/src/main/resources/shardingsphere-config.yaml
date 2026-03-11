@@ -79,7 +79,7 @@ rules:
           sharding-count: 32
           table-sharding-count: 16
           strategy: standard
-          algorithmClassName: org.opengoofy.index12306.framework.starter.database.algorithm.sharding.CustomDbHashModShardingAlgorithm
+          algorithmClassName: org.openzjl.index12306.framework.starter.database.algorithm.sharding.CustomDbHashModShardingAlgorithm
       order_passenger_relation_table_mod:
         type: HASH_MOD
         props:

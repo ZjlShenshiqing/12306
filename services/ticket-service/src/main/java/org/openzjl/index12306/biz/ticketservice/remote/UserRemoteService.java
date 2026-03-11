@@ -18,7 +18,7 @@ import java.util.List;
  * @author zhangjlk
  * @date 2025/12/31 上午10:09
  */
-@FeignClient(value = "index12306-user${unique-name:}-service", url = "http://127.0.0.1:${server.port}")
+@FeignClient(value = "index12306-user${unique-name:}-service")
 public interface UserRemoteService {
 
     /**

@@ -25,7 +25,7 @@ import java.util.List;
  * @author zhangjlk
  * @date 2025/12/15 上午10:08
  */
-@FeignClient(value = "index12306-order${unique-name:}-service", url = "http://127.0.0.1:9001")
+@FeignClient(value = "index12306-order${unique-name:}-service")
 public interface TicketOrderRemoteService {
 
     /**

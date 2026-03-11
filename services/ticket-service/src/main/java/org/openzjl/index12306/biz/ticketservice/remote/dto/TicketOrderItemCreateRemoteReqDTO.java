@@ -37,6 +37,11 @@ public class TicketOrderItemCreateRemoteReqDTO {
     private String seatNumber;
 
     /**
+     * 乘车人ID
+     */
+    private String passengerId;
+
+    /**
      * 真实姓名
      */
     private String realName;

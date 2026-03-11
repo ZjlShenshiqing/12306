@@ -9,19 +9,21 @@ import org.apache.shardingsphere.sharding.api.sharding.complex.ComplexKeysShardi
 import org.apache.shardingsphere.sharding.api.sharding.complex.ComplexKeysShardingValue;
 
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 /**
  * 订单表复合分片算法配置
  * <p>
- * 当前实现为“广播到所有表分片”的兜底策略：直接返回所有可用表名，不做真实路由计算，
- * 主要目的是避免 ClassNotFound 异常导致数据源初始化失败，后续可按业务需要补充真实分片逻辑。
+ * 复合分片算法：优先使用 user_id，其次使用 order_sn 做 hash 取模，路由到单表。
  * </p>
  *
  * @author zhangjlk
  * @date 2026/3/3
  */
-public class OrderCommonTableComplexAlgorithm implements ComplexKeysShardingAlgorithm {
+public class OrderCommonTableComplexAlgorithm implements ComplexKeysShardingAlgorithm<Comparable<?>> {
 
     @Getter
     private Properties props;
@@ -29,6 +31,8 @@ public class OrderCommonTableComplexAlgorithm implements ComplexKeysShardingAlgo
     private int shardingCount;
 
     private static final String SHARDING_COUNT_KEY = "sharding-count";
+    private static final String USER_ID_COL = "user_id";
+    private static final String ORDER_SN_COL = "order_sn";
 
     @Override
     public void init(Properties props) {
@@ -51,10 +55,46 @@ public class OrderCommonTableComplexAlgorithm implements ComplexKeysShardingAlgo
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public Collection<String> doSharding(Collection collection, ComplexKeysShardingValue complexKeysShardingValue) {
-        // 兜底实现：暂时不做精确路由，直接返回所有可用表名，让 ShardingSphere 自行广播执行
-        return collection;
+    public Collection<String> doSharding(Collection<String> availableTargetNames, ComplexKeysShardingValue<Comparable<?>> complexKeysShardingValue) {
+        if (availableTargetNames == null || availableTargetNames.isEmpty() || complexKeysShardingValue == null) {
+            return availableTargetNames;
+        }
+        Object shardingValue = getShardingValue(complexKeysShardingValue);
+        if (shardingValue == null || shardingCount <= 0) {
+            return availableTargetNames;
+        }
+        long hash = Math.abs((long) shardingValue.hashCode());
+        String suffix = String.valueOf(hash % shardingCount);
+        for (String name : availableTargetNames) {
+            if (name.endsWith("_" + suffix) || name.endsWith(suffix)) {
+                return Collections.singleton(name);
+            }
+        }
+        return availableTargetNames;
+    }
+
+    private Object getShardingValue(ComplexKeysShardingValue<Comparable<?>> complexKeysShardingValue) {
+        Map<String, Collection<Comparable<?>>> map = complexKeysShardingValue.getColumnNameAndShardingValuesMap();
+        if (map == null || map.isEmpty()) {
+            return null;
+        }
+        Object userId = firstValue(map, USER_ID_COL);
+        if (userId != null) {
+            return userId;
+        }
+        return firstValue(map, ORDER_SN_COL);
+    }
+
+    private Object firstValue(Map<String, Collection<Comparable<?>>> map, String key) {
+        Set<Map.Entry<String, Collection<Comparable<?>>>> entries = map.entrySet();
+        for (Map.Entry<String, Collection<Comparable<?>>> entry : entries) {
+            if (entry.getKey() != null && entry.getKey().equalsIgnoreCase(key) && entry.getValue() != null) {
+                for (Comparable<?> v : entry.getValue()) {
+                    return v;
+                }
+            }
+        }
+        return null;
     }
 
     public int getShardingCount() {
