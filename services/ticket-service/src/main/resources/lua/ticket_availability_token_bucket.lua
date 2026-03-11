@@ -52,7 +52,9 @@ for index, jsonObj in ipairs(jsonArray) do
     -- 从Redis Hash中获取该路线该座位类型的余票数量
     -- KEYS[1] 是令牌桶的Hash Key
     -- actualInnerHashKey 是Hash的字段Key
-    local ticketSeatAvailabilityTokenValue = tonumber(redis.call('hget', KEYS[1], tostring(actualInnerHashKey)))
+    -- hget 不存在会返回 nil，tonumber(nil) 仍为 nil，后续与 number 比较会报错
+    -- 不存在视为 0（余票不足）
+    local ticketSeatAvailabilityTokenValue = tonumber(redis.call('hget', KEYS[1], tostring(actualInnerHashKey))) or 0
     
     -- 如果余票数量小于购买数量，说明余票不足
     if ticketSeatAvailabilityTokenValue < count then

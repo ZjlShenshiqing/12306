@@ -61,7 +61,9 @@ for index, jsonObj in ipairs(jsonArray) do
         local actualInnerHashKey = startStation .. "_" .. endStation .. "_" .. seatType
         
         -- 从Redis Hash中获取该路线段该座位类型的当前余票数量
-        local ticketSeatAvailabilityTokenValue = tonumber(redis.call('hget', KEYS[1], tostring(actualInnerHashKey)))
+        -- hget 不存在会返回 nil，tonumber(nil) 仍为 nil，后续与 number 比较会报错
+        -- 不存在时用 -1 兜底，使得 >= 0 判断不成立，从而跳过回滚
+        local ticketSeatAvailabilityTokenValue = tonumber(redis.call('hget', KEYS[1], tostring(actualInnerHashKey))) or -1
         
         -- 安全检查：只有当余票数量大于等于0时才执行回滚
         -- 这个判断防止异常情况下的数据不一致：
