@@ -86,7 +86,7 @@
             <Button
               @click="
                 () => {
-                  fetchOrderCancel({ orderSn: query?.sn }).then((res) => {
+                  fetchOrderCancel({ orderSn: currentOrderSn }).then((res) => {
                     if (res.success) {
                       message.success('订单取消成功')
                       router.push('/ticketSearch')
@@ -246,10 +246,12 @@ import {
   fetchOrderBySn,
   fetchPay,
   fetchOrderCancel,
-  fetchOrderStatus
+  fetchOrderStatus,
+  fetchTicketList
 } from '@/service'
 import { useRoute, useRouter } from 'vue-router'
 import { onMounted, reactive, computed, watch, onUnmounted } from 'vue'
+import Cookie from 'js-cookie'
 import {
   TICKET_TYPE_LIST,
   ID_CARD_TYPE,
@@ -261,6 +263,7 @@ let timer = undefined
 
 const { query } = useRoute()
 const router = useRouter()
+const currentOrderSn = query?.orderSn || query?.sn
 const state = reactive({
   count: 600000,
   currentInfo: null,
@@ -304,11 +307,47 @@ onUnmounted(() => {
 })
 
 const getOrder = () => {
-  fetchOrderBySn({ orderSn: query?.sn }).then((res) => {
-    if (res.success) {
+  fetchOrderBySn({ orderSn: currentOrderSn }).then((res) => {
+    if (res.success && res.data) {
       state.currentInfo = res.data
+    } else {
+      fallbackGetOrder()
     }
+  }).catch(() => {
+    fallbackGetOrder()
   })
+}
+
+const fallbackGetOrder = () => {
+  const userId = Cookie.get('userId')
+  if (!userId || !currentOrderSn) {
+    message.error('订单查询失败，请返回订单列表重试')
+    return
+  }
+  const statusTypes = [0, 1, 2]
+  const tryFetchByStatus = (index = 0) => {
+    if (index >= statusTypes.length) {
+      message.error('未查询到对应订单')
+      return
+    }
+    fetchTicketList({
+      userId,
+      current: 1,
+      size: 100,
+      statusType: statusTypes[index]
+    }).then((res) => {
+      const records = res?.data?.records ?? []
+      const matched = records.find((item) => item.orderSn === currentOrderSn)
+      if (matched) {
+        state.currentInfo = matched
+      } else {
+        tryFetchByStatus(index + 1)
+      }
+    }).catch(() => {
+      tryFetchByStatus(index + 1)
+    })
+  }
+  tryFetchByStatus()
 }
 
 watch(
@@ -335,9 +374,9 @@ const handlePay = (channel) => {
   const body = {
     channel: 0,
     tradeType: 0,
-    orderSn: query.sn,
+    orderSn: currentOrderSn,
     totalAmount: totalAmount.value,
-    outOrderSn: query.orderSn,
+    outOrderSn: currentOrderSn,
     subject: `${state.currentInfo.departure}-${state.currentInfo.arrival}`
   }
   fetchPay(body).then((res) => {
@@ -352,7 +391,7 @@ const handlePay = (channel) => {
 
 const getOrderStatus = () => {
   state.isInitiatePayment &&
-    fetchOrderStatus({ orderSn: query?.sn })
+    fetchOrderStatus({ orderSn: currentOrderSn })
       .then((res) => {
         state.isPaying = res.data.status === 0
         res.data.status === 20 &&

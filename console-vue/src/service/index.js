@@ -95,7 +95,8 @@ const fetchBuyTicket = async (body) => {
 const fetchOrderBySn = async (params) => {
   const { data } = await http({
     method: 'GET',
-    url: '/api/order-service/order/ticket/query',
+    // 订单详情页需要按订单号查询订单及乘客明细
+    url: '/api/order-service/order/item/ticket/query',
     params
   })
   return data

@@ -48,6 +48,18 @@ rocketmq:
     retry-times-when-send-failed: 1
     retry-times-when-send-async-failed: 1
 
+# 订单按 orderSn 查询兜底：当 ShardingSphere 路由查不到时，直接遍历物理表
+order:
+  query-fallback:
+    enabled: true
+    datasources:
+      - url: jdbc:mysql://192.168.150.100:3306/12306_order_0?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+        username: root
+        password: 123456Po*
+      - url: jdbc:mysql://192.168.150.100:3306/12306_order_1?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+        username: root
+        password: 123456Po*
+
 management:
   endpoints:
     web:

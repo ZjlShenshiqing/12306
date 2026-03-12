@@ -8,7 +8,8 @@ if (Cookie.get('token')) {
 // 开发环境用空 baseURL，走 vue.config.js 的 devServer 代理 /api -> 9000，避免跨域和 Network Error
 const initAxios = Axios.create({
   timeout: 1800000, //数据响应过期时间
-  baseURL: process.env.NODE_ENV === 'development' ? '' : 'http://localhost:9000'
+  // 统一走相对路径，避免生产/局域网环境固定指向 localhost 导致 404
+  baseURL: ''
   // headers: ['Authorization', Cookie.get('token') ?? null]
 })
 

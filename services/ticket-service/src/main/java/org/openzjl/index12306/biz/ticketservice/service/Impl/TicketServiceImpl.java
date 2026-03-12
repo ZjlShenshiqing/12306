@@ -1139,7 +1139,7 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
                     .departureTime(trainStationRelationDO.getDepartureTime())                        // 出发时间
                     .arrivalTime(trainStationRelationDO.getArrivalTime())                            // 到达时间
                     .ridingDate(trainStationRelationDO.getDepartureTime())                            // 乘车日期（使用出发时间）
-                    .userId(Long.valueOf(UserContext.getUserId()))                                   // 用户ID
+                    .userId(String.valueOf(Long.valueOf(UserContext.getUserId())))                                   // 用户ID
                     .username(UserContext.getUserName())                                             // 用户名
                     .trainId(Long.parseLong(requestParam.getTrainId()))                              // 车次ID
                     .ticketOrderItems(orderItemCreateRemoteReqDTOList)                                // 订单项列表
