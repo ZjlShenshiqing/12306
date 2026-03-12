@@ -78,11 +78,18 @@ public class OrderCommonTableComplexAlgorithm implements ComplexKeysShardingAlgo
         if (map == null || map.isEmpty()) {
             return null;
         }
+        Object orderSn = firstValue(map, ORDER_SN_COL);
         Object userId = firstValue(map, USER_ID_COL);
+        if (orderSn != null && userId != null) {
+            return orderSn;
+        }
+        if (orderSn != null && userId == null) {
+            return null;
+        }
         if (userId != null) {
             return userId;
         }
-        return firstValue(map, ORDER_SN_COL);
+        return null;
     }
 
     private Object firstValue(Map<String, Collection<Comparable<?>>> map, String key) {

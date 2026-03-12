@@ -36,6 +36,7 @@ import org.openzjl.index12306.biz.orderservice.remote.UserRemoteService;
 import org.openzjl.index12306.biz.orderservice.remote.dto.UserQueryActualRespDTO;
 import org.openzjl.index12306.biz.orderservice.service.OrderItemService;
 import org.openzjl.index12306.biz.orderservice.service.OrderPassengerRelationService;
+import org.openzjl.index12306.biz.orderservice.service.OrderQueryFallbackService;
 import org.openzjl.index12306.biz.orderservice.service.OrderService;
 import org.openzjl.index12306.biz.orderservice.service.orderid.OrderIdGeneratorManager;
 import org.openzjl.index12306.framework.starter.convention.exception.ClientException;
@@ -43,6 +44,7 @@ import org.openzjl.index12306.framework.starter.convention.exception.ServiceExce
 import org.openzjl.index12306.framework.starter.convention.page.PageResponse;
 import org.openzjl.index12306.framework.starter.convention.result.Result;
 import org.openzjl.index12306.framework.starter.database.toolkit.PageUtil;
+import org.openzjl.index12306.framework.starter.log.enums.DelEnum;
 import org.openzjl.index12306.framework.starter.log.toolkit.BeanUtil;
 import org.openzjl.index12306.framework.starter.user.core.UserContext;
 import org.redisson.api.RLock;
@@ -51,6 +53,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 
@@ -87,6 +90,11 @@ public class OrderServiceImpl implements OrderService {
     private final OrderItemService orderItemService;
 
     /**
+     * 按物理分表兜底查询订单详情服务
+     */
+    private final OrderQueryFallbackService orderQueryFallbackService;
+
+    /**
      * 延迟关闭订单消息生产者
      */
     private final DelayCloseOrderSendProduce delayCloseOrderSendProduce;
@@ -111,22 +119,31 @@ public class OrderServiceImpl implements OrderService {
      */
     @Override
     public TicketOrderDetailRespDTO queryTicketByOrderSn(String orderSn) {
-        // 构建订单查询条件：根据订单号查询
-        LambdaQueryWrapper<OrderDO> queryWrapper = Wrappers.lambdaQuery(OrderDO.class)
-                .eq(OrderDO::getOrderSn, orderSn);
-        // 查询订单主表信息
-        OrderDO orderDO = orderMapper.selectOne(queryWrapper);
-        // 将订单实体转换为响应DTO
-        TicketOrderDetailRespDTO result = BeanUtil.convert(orderDO, TicketOrderDetailRespDTO.class);
-        
-        // 构建订单明细查询条件：根据订单号查询所有订单明细
-        LambdaQueryWrapper<OrderItemDO> orderItemQueryWrapper = Wrappers.lambdaQuery(OrderItemDO.class)
-                .eq(OrderItemDO::getOrderSn, orderSn);
-        // 查询订单明细列表（包含所有乘客信息）
-        List<OrderItemDO> orderItemDOList = orderItemMapper.selectList(orderItemQueryWrapper);
-        // 将订单明细实体列表转换为乘客详情DTO列表，并设置到结果对象中
-        result.setPassengerDetails(BeanUtil.convert(orderItemDOList, TicketOrderPassengerDetailRespDTO.class));
-        return result;
+        try {
+            // 构建订单查询条件：根据订单号查询
+            LambdaQueryWrapper<OrderDO> queryWrapper = Wrappers.lambdaQuery(OrderDO.class)
+                    .eq(OrderDO::getOrderSn, orderSn);
+            // 分库分表按 orderSn 广播查询时，selectOne 可能因命中多条结果直接抛异常，这里改为 selectList 后取首条
+            List<OrderDO> orderDOList = orderMapper.selectList(queryWrapper);
+            if (orderDOList == null || orderDOList.isEmpty()) {
+                return orderQueryFallbackService.queryByOrderSnFallback(orderSn);
+            }
+            OrderDO orderDO = orderDOList.get(0);
+            // 将订单实体转换为响应DTO
+            TicketOrderDetailRespDTO result = BeanUtil.convert(orderDO, TicketOrderDetailRespDTO.class);
+
+            // 构建订单明细查询条件：根据订单号查询所有订单明细
+            LambdaQueryWrapper<OrderItemDO> orderItemQueryWrapper = Wrappers.lambdaQuery(OrderItemDO.class)
+                    .eq(OrderItemDO::getOrderSn, orderSn);
+            // 查询订单明细列表（包含所有乘客信息）
+            List<OrderItemDO> orderItemDOList = orderItemMapper.selectList(orderItemQueryWrapper);
+            // 将订单明细实体列表转换为乘客详情DTO列表，并设置到结果对象中
+            result.setPassengerDetails(BeanUtil.convert(orderItemDOList, TicketOrderPassengerDetailRespDTO.class));
+            return result;
+        } catch (Exception ex) {
+            log.warn("按 orderSn 查询订单失败，启用物理表兜底，orderSn={}", orderSn, ex);
+            return orderQueryFallbackService.queryByOrderSnFallback(orderSn);
+        }
     }
 
     /**
@@ -230,6 +247,7 @@ public class OrderServiceImpl implements OrderService {
         // 生成全局唯一的订单号
         // 订单号格式：分布式ID生成器生成的ID + 用户ID的后6位
         String orderSn = OrderIdGeneratorManager.generateId(requestParam.getUserId());
+        Date now = new Date();
         
         // 构建订单主表实体对象
         OrderDO orderDO = OrderDO.builder()
@@ -247,6 +265,9 @@ public class OrderServiceImpl implements OrderService {
                 .username(requestParam.getUsername())                                 // 用户名
                 .userId(String.valueOf(requestParam.getUserId()))                      // 用户ID（转换为字符串）
                 .build();
+        orderDO.setCreateTime(now);
+        orderDO.setUpdateTime(now);
+        orderDO.setDelFlag(DelEnum.NORMAL.code());
         // 保存订单主表记录
         orderMapper.insert(orderDO);
         
@@ -274,6 +295,9 @@ public class OrderServiceImpl implements OrderService {
                     .userId(String.valueOf(requestParam.getUserId()))                  // 用户ID
                     .status(0)                                                         // 订单明细状态：0表示待支付
                     .build();
+            orderItemDO.setCreateTime(now);
+            orderItemDO.setUpdateTime(now);
+            orderItemDO.setDelFlag(DelEnum.NORMAL.code());
             orderItemDOList.add(orderItemDO);
             
             // 构建订单乘客关系实体：用于建立订单与乘客的关联关系
@@ -283,6 +307,9 @@ public class OrderServiceImpl implements OrderService {
                     .idCard(item.getIdCard())                                          // 乘客身份证号
                     .orderSn(orderSn)                                                  // 订单号（关联订单主表）
                     .build();
+            orderItemPassengerDO.setCreateTime(now);
+            orderItemPassengerDO.setUpdateTime(now);
+            orderItemPassengerDO.setDelFlag(DelEnum.NORMAL.code());
             orderItemPassengerDOList.add(orderItemPassengerDO);
         });
         

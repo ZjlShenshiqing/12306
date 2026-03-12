@@ -88,12 +88,21 @@ public class OrderCommonDataBaseComplexAlgorithm implements ComplexKeysShardingA
         if (map == null || map.isEmpty()) {
             return null;
         }
-        // 优先用 user_id，其次 order_sn
+        Object orderSn = firstValue(map, ORDER_SN_COL);
         Object userId = firstValue(map, USER_ID_COL);
+        // INSERT 时 SQL 同时带 user_id 和 order_sn，用 order_sn 精确路由到单库
+        if (orderSn != null && userId != null) {
+            return orderSn;
+        }
+        // 仅带 order_sn 的查询（订单详情页）：广播到所有分片，兼容历史按 user_id 路由插入的订单
+        if (orderSn != null && userId == null) {
+            return null;
+        }
+        // 仅带 user_id 的查询（订单列表页）：用 user_id 精确路由
         if (userId != null) {
             return userId;
         }
-        return firstValue(map, ORDER_SN_COL);
+        return null;
     }
 
     private Object firstValue(Map<String, Collection<Comparable<?>>> map, String key) {
