@@ -5,6 +5,7 @@
 package org.openzjl.index12306.biz.payservice.mq.produce;
 
 import cn.hutool.core.util.StrUtil;
+import com.alibaba.fastjson2.JSON;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.common.message.MessageConst;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
@@ -127,8 +128,8 @@ public class RefundResultCallbackOrderSendProduce extends AbstractCommonSendProd
         
         // 使用 MessageBuilder 构建消息
         return MessageBuilder
-                // 设置消息体：使用 MessageWrapper 包装扩展参数中的 Keys 和事件对象
-                .withPayload(new MessageWrapper(requestParam.getKeys(), messageSendEvent))
+                // 设置消息体：RocketMQ 按字符串消息体发送
+                .withPayload(JSON.toJSONString(new MessageWrapper<>(requestParam.getKeys(), messageSendEvent)))
                 // 设置消息头：消息的 Keys，用于消息查询和追踪
                 .setHeader(MessageConst.PROPERTY_KEYS, keys)
                 // 设置消息头：消息的 Tags，用于消息过滤

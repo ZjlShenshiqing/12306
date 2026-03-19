@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 2025-2026 zhangjlk
- * All rights reserved.
- */
 package org.openzjl.index12306.biz.payservice.dto.handler;
 
 import cn.hutool.core.text.StrBuilder;
@@ -23,7 +19,6 @@ import org.openzjl.index12306.biz.payservice.dto.handler.base.AbstractPayHandler
 import org.openzjl.index12306.biz.payservice.dto.req.AliPayRequest;
 import org.openzjl.index12306.framework.starter.convention.exception.ServiceException;
 import org.openzjl.index12306.framework.starter.designpattern.staregy.AbstractExecuteStrategy;
-import org.openzjl.index12306.framework.starter.log.toolkit.BeanUtil;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
@@ -46,7 +41,7 @@ public class AliPayNativeHandler extends AbstractPayHandler implements AbstractE
     @Retryable(value = ServiceException.class, maxAttempts = 3, backoff = @Backoff(delay = 1000, multiplier = 1.5))
     public PayResponse pay(PayRequest payRequest) {
         AliPayRequest aliPayRequest = payRequest.getAliPayRequest();
-        AlipayConfig alipayConfig = BeanUtil.convert(aliPayProperties, AlipayConfig.class);
+        AlipayConfig alipayConfig = aliPayProperties.toAlipayConfig();
         AlipayClient alipayClient = new DefaultAlipayClient(alipayConfig);
         AlipayTradePagePayModel model = new AlipayTradePagePayModel();
         model.setOutTradeNo(aliPayRequest.getOrderSn());
@@ -87,3 +82,4 @@ public class AliPayNativeHandler extends AbstractPayHandler implements AbstractE
         return pay(requestParam);
     }
 }
+

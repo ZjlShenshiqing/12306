@@ -32,6 +32,11 @@ public interface PayRequest {
     String getOrderRequestId();
 
     /**
+     * 支付渠道
+     */
+    Integer getChannel();
+
+    /**
      * 订单金额
      */
     BigDecimal getTotalAmount();

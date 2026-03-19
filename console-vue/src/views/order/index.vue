@@ -107,6 +107,7 @@
               @click="state.open = true"
               >网上支付</Button
             >
+            <Button @click="state.rechargeOpen = true">余额充值</Button>
           </Space>
         </div>
       </Space>
@@ -178,6 +179,12 @@
         </span>
         元
       </div>
+      <div :style="{ marginTop: '8px' }">
+        当前余额：<span :style="{ color: '#1677ff', fontWeight: 'bold' }">{{ state.balance }}</span> 元
+      </div>
+      <div :style="{ marginTop: '12px' }">
+        <Button type="primary" @click="() => handlePay(1)">余额支付</Button>
+      </div>
       <Divider dashed></Divider>
       <div :style="{ overflow: 'hidden' }">
         <div v-for="item in BANK_LIST" class="bank3">
@@ -226,6 +233,25 @@
       >
     </Space>
   </Modal>
+  <Modal
+    :visible="state.rechargeOpen"
+    title="余额充值"
+    @cancel="state.rechargeOpen = false"
+    @ok="rechargeBalance"
+    :confirm-loading="state.rechargeLoading"
+  >
+    <div :style="{ marginBottom: '12px' }">
+      当前余额：<span :style="{ color: '#1677ff', fontWeight: 'bold' }">{{ state.balance }}</span> 元
+    </div>
+    <InputNumber
+      v-model:value="state.rechargeAmount"
+      :min="0.01"
+      :precision="2"
+      :step="50"
+      :style="{ width: '100%' }"
+      placeholder="请输入充值金额"
+    />
+  </Modal>
 </template>
 
 <script setup>
@@ -239,12 +265,15 @@ import {
   message,
   Spin,
   Row,
-  Col
+  Col,
+  InputNumber
 } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import {
   fetchOrderBySn,
   fetchPay,
+  fetchBalanceInfo,
+  fetchBalanceRecharge,
   fetchOrderCancel,
   fetchOrderStatus,
   fetchTicketList
@@ -270,6 +299,10 @@ const state = reactive({
   open: false,
   html: '',
   loading: false,
+  balance: 0,
+  rechargeOpen: false,
+  rechargeLoading: false,
+  rechargeAmount: null,
   isInitiatePayment: false,
   isPaying: false,
   isPayingOpen: false
@@ -301,6 +334,7 @@ onMounted(() => {
   }, 1000)
   dayjs.duration(state.count).minutes()
   getOrder()
+  loadBalance()
 })
 onUnmounted(() => {
   clearInterval(timer)
@@ -364,15 +398,54 @@ const totalAmount = computed(() => {
   return amount / 100
 })
 
+const loadBalance = () => {
+  fetchBalanceInfo()
+    .then((res) => {
+      if (res?.success) {
+        state.balance = Number(res?.data?.balance ?? 0)
+      }
+    })
+    .catch(() => {
+      state.balance = 0
+    })
+}
+
+const rechargeBalance = () => {
+  const amount = Number(state.rechargeAmount)
+  if (!amount || amount <= 0) {
+    return message.error('请输入正确的充值金额')
+  }
+  state.rechargeLoading = true
+  fetchBalanceRecharge({ amount }).then((res) => {
+    if (res?.success) {
+      state.balance = Number(res?.data?.balance ?? state.balance)
+      state.rechargeOpen = false
+      state.rechargeAmount = null
+      message.success('充值成功')
+    } else {
+      message.error(res?.message || '充值失败')
+    }
+  }).catch(() => {
+    message.error('充值失败，请稍后重试')
+  }).finally(() => {
+    state.rechargeLoading = false
+  })
+}
+
 const handlePay = (channel) => {
-  if (channel !== 0) {
-    return message.error('该支付方式暂未对接，请稍候...')
+  if (channel !== 0 && channel !== 1) {
+    return message.error('该支付方式暂未对接，请稍后')
+  }
+  if (channel === 1 && state.balance < totalAmount.value) {
+    state.open = false
+    state.rechargeOpen = true
+    return message.error('余额不足，请先充值')
   }
   state.isInitiatePayment = true
   state.open = false
   state.isPayingOpen = true
   const body = {
-    channel: 0,
+    channel,
     tradeType: 0,
     orderSn: currentOrderSn,
     totalAmount: totalAmount.value,
@@ -380,12 +453,34 @@ const handlePay = (channel) => {
     subject: `${state.currentInfo.departure}-${state.currentInfo.arrival}`
   }
   fetchPay(body).then((res) => {
-    state.html = res.data?.body
+    if (channel === 1) {
+      if (!res?.success) {
+        state.isPayingOpen = false
+        state.isInitiatePayment = false
+        return message.error(res?.message || '余额支付失败')
+      }
+      message.success('余额支付成功')
+      loadBalance()
+      router.push(`/paySuccess?orderSn=${currentOrderSn}`)
+      return
+    }
+    const payBody = res?.data?.body
+    if (!res?.success || !payBody) {
+      state.isPayingOpen = false
+      state.isInitiatePayment = false
+      message.error(res?.message || '未获取到支付宝支付表单，请检查支付服务日志')
+      return
+    }
+    state.html = payBody
     state.loading = true
     setTimeout(() => {
       state.loading = false
-      window.open(`/aliPay?body=${encodeURIComponent(res.data?.body)}`)
+      window.open(`/aliPay?body=${encodeURIComponent(payBody)}`)
     }, 500)
+  }).catch(() => {
+    state.isPayingOpen = false
+    state.isInitiatePayment = false
+    message.error('发起支付失败，请稍后重试')
   })
 }
 

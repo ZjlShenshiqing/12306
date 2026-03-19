@@ -4,37 +4,49 @@
  */
 package org.openzjl.index12306.biz.payservice.config;
 
+import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * RocketMQ 配置类
- * <p>
- * 负责配置 RocketMQ 相关的 Bean，确保 RocketMQTemplate 能够被正确创建和注入
- * </p>
- *
- * @author zhangjlk
- * @date 2026/2/3 上午10:48
+ * RocketMQ producer configuration.
  */
 @Configuration
+@ConditionalOnProperty(prefix = "rocketmq", name = "name-server")
 public class RocketMQConfiguration {
-    
-    /**
-     * 创建 RocketMQTemplate Bean
-     * <p>
-     * 当没有 RocketMQTemplate Bean 且配置了 rocketmq.name-server 时，创建默认的 RocketMQTemplate
-     * </p>
-     *
-     * @return RocketMQTemplate 实例
-     */
+
+    @Value("${rocketmq.name-server}")
+    private String nameServer;
+
+    @Value("${rocketmq.producer.group}")
+    private String producerGroup;
+
+    @Value("${rocketmq.producer.send-message-timeout:2000}")
+    private Integer sendMessageTimeout;
+
+    @Value("${rocketmq.producer.retry-times-when-send-failed:1}")
+    private Integer retryTimesWhenSendFailed;
+
+    @Value("${rocketmq.producer.retry-times-when-send-async-failed:1}")
+    private Integer retryTimesWhenSendAsyncFailed;
+
     @Bean
-    @ConditionalOnMissingBean(RocketMQTemplate.class)
-    @ConditionalOnProperty("rocketmq.name-server")
-    public RocketMQTemplate rocketMQTemplate() {
-        return new RocketMQTemplate();
+    public DefaultMQProducer defaultMQProducer() {
+        DefaultMQProducer producer = new DefaultMQProducer(producerGroup);
+        producer.setNamesrvAddr(nameServer);
+        producer.setSendMsgTimeout(sendMessageTimeout);
+        producer.setRetryTimesWhenSendFailed(retryTimesWhenSendFailed);
+        producer.setRetryTimesWhenSendAsyncFailed(retryTimesWhenSendAsyncFailed);
+        return producer;
     }
-    
+
+    @Bean
+    public RocketMQTemplate rocketMQTemplate(DefaultMQProducer defaultMQProducer) {
+        RocketMQTemplate rocketMQTemplate = new RocketMQTemplate();
+        rocketMQTemplate.setProducer(defaultMQProducer);
+        return rocketMQTemplate;
+    }
 }

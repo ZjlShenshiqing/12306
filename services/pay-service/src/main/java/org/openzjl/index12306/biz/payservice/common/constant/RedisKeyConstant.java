@@ -16,4 +16,9 @@ public final class RedisKeyConstant {
      * 订单未支付临时存储信息
      */
     public static final String ORDER_PAY_RESULT_INFO = "index12306-pay-service:order_pay_result:";
+
+    /**
+     * 用户余额缓存信息
+     */
+    public static final String USER_BALANCE_INFO = "index12306-pay-service:user_balance:%s";
 }

@@ -19,7 +19,12 @@ public enum PayChannelEnum {
     /**
      * 支付宝支付
      */
-    ALI_PAY(0, "ALI_PAY", "支付宝");
+    ALI_PAY(0, "ALI_PAY", "支付宝"),
+
+    /**
+     * 余额支付
+     */
+    BALANCE_PAY(1, "BALANCE_PAY", "余额");
 
     @Getter
     private final Integer code;

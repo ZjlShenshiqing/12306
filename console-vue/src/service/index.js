@@ -111,6 +111,23 @@ const fetchPay = async (body) => {
   return data
 }
 
+const fetchBalanceInfo = async () => {
+  const { data } = await http({
+    method: 'GET',
+    url: '/api/pay-service/balance/info'
+  })
+  return data
+}
+
+const fetchBalanceRecharge = async (body) => {
+  const { data } = await http({
+    method: 'POST',
+    url: '/api/pay-service/balance/recharge',
+    data: body
+  })
+  return data
+}
+
 const fetchStationAll = async () => {
   const { data } = await http({
     method: 'GET',
@@ -203,6 +220,8 @@ export {
   fetchBuyTicket,
   fetchOrderBySn,
   fetchPay,
+  fetchBalanceInfo,
+  fetchBalanceRecharge,
   fetchStationAll,
   fechUserInfo,
   fetchTrainStation,

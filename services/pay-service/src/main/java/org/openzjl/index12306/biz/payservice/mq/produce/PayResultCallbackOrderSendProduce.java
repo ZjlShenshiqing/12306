@@ -5,6 +5,7 @@
 package org.openzjl.index12306.biz.payservice.mq.produce;
 
 import cn.hutool.core.util.StrUtil;
+import com.alibaba.fastjson2.JSON;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.common.message.MessageConst;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
@@ -96,7 +97,7 @@ public class PayResultCallbackOrderSendProduce extends AbstractCommonSendProduce
         
         // 构建消息，包含消息包装器和消息头
         return MessageBuilder
-                .withPayload(new MessageWrapper(requestParam.getKeys(), messageSendEvent)) // 构建消息包装器
+                .withPayload(JSON.toJSONString(new MessageWrapper<>(requestParam.getKeys(), messageSendEvent))) // RocketMQ 字符串消息体
                 .setHeader(MessageConst.PROPERTY_KEYS, keys) // 设置消息键
                 .setHeader(MessageConst.PROPERTY_TAGS, requestParam.getTag()) // 设置消息标签
                 .build();

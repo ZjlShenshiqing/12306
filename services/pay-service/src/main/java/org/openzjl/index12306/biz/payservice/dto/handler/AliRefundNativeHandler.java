@@ -27,7 +27,6 @@ import org.openzjl.index12306.biz.payservice.dto.handler.base.AbstractRefundHand
 import org.openzjl.index12306.biz.payservice.dto.req.AliRefundRequest;
 import org.openzjl.index12306.framework.starter.convention.exception.ServiceException;
 import org.openzjl.index12306.framework.starter.designpattern.staregy.AbstractExecuteStrategy;
-import org.openzjl.index12306.framework.starter.log.toolkit.BeanUtil;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
@@ -37,7 +36,6 @@ import java.math.BigDecimal;
 
 /**
  * 阿里支付组件
- * 公众号：马丁玩编程，回复：加群，添加马哥微信（备注：12306）获取项目资料
  */
 @Slf4j
 @Service
@@ -55,7 +53,7 @@ public class AliRefundNativeHandler extends AbstractRefundHandler implements Abs
     @Override
     public RefundResponse refund(RefundRequest payRequest) {
         AliRefundRequest aliRefundRequest = payRequest.getAliRefundRequest();
-        AlipayConfig alipayConfig = BeanUtil.convert(aliPayProperties, AlipayConfig.class);
+        AlipayConfig alipayConfig = aliPayProperties.toAlipayConfig();
         AlipayClient alipayClient = new DefaultAlipayClient(alipayConfig);
         AlipayTradeRefundModel model = new AlipayTradeRefundModel();
         model.setOutTradeNo(aliRefundRequest.getOrderSn());
@@ -99,3 +97,4 @@ public class AliRefundNativeHandler extends AbstractRefundHandler implements Abs
         return refund(requestParam);
     }
 }
+

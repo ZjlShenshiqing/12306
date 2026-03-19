@@ -17,7 +17,7 @@ import org.springframework.retry.annotation.EnableRetry;
  * @date 2026/1/22 12:26
  */
 @SpringBootApplication
-@MapperScan
+@MapperScan("org.openzjl.index12306.biz.payservice.dao.mapper")
 @EnableFeignClients
 @EnableRetry
 public class PayServiceApplication {

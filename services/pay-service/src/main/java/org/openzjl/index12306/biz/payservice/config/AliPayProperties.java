@@ -4,6 +4,8 @@
  */
 package org.openzjl.index12306.biz.payservice.config;
 
+import cn.hutool.core.util.StrUtil;
+import com.alipay.api.AlipayConfig;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
@@ -27,9 +29,14 @@ public class AliPayProperties {
     private String appId;
 
     /**
-     * 商户私钥
+     * 商户私钥 （暂时不使用）
      */
     private String privateKey;
+
+    /**
+     * 商户私钥（推荐字段）
+     */
+    private String merchantPrivateKey;
 
     /**
      * 支付宝公钥字符串
@@ -60,4 +67,27 @@ public class AliPayProperties {
      * 签名算法
      */
     private String signType;
+
+    public AlipayConfig toAlipayConfig() {
+        AlipayConfig config = new AlipayConfig();
+        config.setAppId(appId);
+        config.setServerUrl(serverUrl);
+        config.setAlipayPublicKey(alipayPublicKey);
+        config.setPrivateKey(getEffectivePrivateKey());
+        config.setFormat(format);
+        config.setSignType(signType);
+        config.setCharset(normalizeCharset(charset));
+        return config;
+    }
+
+    public String getEffectivePrivateKey() {
+        return StrUtil.isNotBlank(merchantPrivateKey) ? merchantPrivateKey : privateKey;
+    }
+
+    private String normalizeCharset(String sourceCharset) {
+        if (StrUtil.isBlank(sourceCharset)) {
+            return "UTF-8";
+        }
+        return "UTF8".equalsIgnoreCase(sourceCharset) ? "UTF-8" : sourceCharset;
+    }
 }
