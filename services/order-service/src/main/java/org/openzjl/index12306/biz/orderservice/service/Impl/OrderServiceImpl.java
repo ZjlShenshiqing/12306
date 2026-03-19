@@ -119,10 +119,20 @@ public class OrderServiceImpl implements OrderService {
      */
     @Override
     public TicketOrderDetailRespDTO queryTicketByOrderSn(String orderSn) {
+        return queryTicketByOrderSn(orderSn, null);
+    }
+
+    @Override
+    public TicketOrderDetailRespDTO queryTicketByOrderSn(String orderSn, String userIdParam) {
         try {
-            // 构建订单查询条件：根据订单号查询
+            // 优先使用参数传入的 userId，其次从 UserContext 获取（网关 header），便于分片精确路由
+            String userId = (userIdParam != null && !userIdParam.isBlank())
+                    ? userIdParam : UserContext.getUserId();
             LambdaQueryWrapper<OrderDO> queryWrapper = Wrappers.lambdaQuery(OrderDO.class)
                     .eq(OrderDO::getOrderSn, orderSn);
+            if (userId != null && !userId.isBlank()) {
+                queryWrapper.eq(OrderDO::getUserId, userId);
+            }
             // 分库分表按 orderSn 广播查询时，selectOne 可能因命中多条结果直接抛异常，这里改为 selectList 后取首条
             List<OrderDO> orderDOList = orderMapper.selectList(queryWrapper);
             if (orderDOList == null || orderDOList.isEmpty()) {
@@ -132,9 +142,12 @@ public class OrderServiceImpl implements OrderService {
             // 将订单实体转换为响应DTO
             TicketOrderDetailRespDTO result = BeanUtil.convert(orderDO, TicketOrderDetailRespDTO.class);
 
-            // 构建订单明细查询条件：根据订单号查询所有订单明细
+            // 构建订单明细查询条件：根据订单号查询所有订单明细；有 userId 时一并带上以精确路由
             LambdaQueryWrapper<OrderItemDO> orderItemQueryWrapper = Wrappers.lambdaQuery(OrderItemDO.class)
                     .eq(OrderItemDO::getOrderSn, orderSn);
+            if (userId != null && !userId.isBlank()) {
+                orderItemQueryWrapper.eq(OrderItemDO::getUserId, userId);
+            }
             // 查询订单明细列表（包含所有乘客信息）
             List<OrderItemDO> orderItemDOList = orderItemMapper.selectList(orderItemQueryWrapper);
             // 将订单明细实体列表转换为乘客详情DTO列表，并设置到结果对象中

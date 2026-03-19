@@ -49,6 +49,7 @@ rocketmq:
     retry-times-when-send-async-failed: 1
 
 # 订单按 orderSn 查询兜底：当 ShardingSphere 路由查不到时，直接遍历物理表
+# 若 MySQL 不在 192.168.150.100，请改为实际 IP（与 shardingsphere-config 中一致）
 order:
   query-fallback:
     enabled: true

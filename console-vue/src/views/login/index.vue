@@ -121,7 +121,7 @@ const handleFinish = () => {
       if (res.success) {
         Cookies.set('token', res.data?.accessToken)
         Cookies.set('username', res.data?.username)
-        Cookies.set('userId', res.data?.userId)
+        Cookies.set('userId', res.data?.userId ?? res.data?.id ?? '')
         router.push('/ticketSearch')
       } else {
         message.error(res.message)
@@ -139,9 +139,9 @@ const handleLogin = () => {
         password: formState.code
       }).then((res) => {
         if (res.success) {
-          Cookies.set('token', res.data?.accessToken)
-          Cookies.set('userId', res.data?.userId)
-          Cookies.set('username', res.data?.username)
+        Cookies.set('token', res.data?.accessToken)
+        Cookies.set('userId', res.data?.userId ?? res.data?.id ?? '')
+        Cookies.set('username', res.data?.username)
           router.push('/ticketSearch')
         } else {
           message.error(res.message)

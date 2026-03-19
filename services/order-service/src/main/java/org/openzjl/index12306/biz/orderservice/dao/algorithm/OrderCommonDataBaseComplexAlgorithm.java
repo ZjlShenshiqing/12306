@@ -94,13 +94,13 @@ public class OrderCommonDataBaseComplexAlgorithm implements ComplexKeysShardingA
         if (orderSn != null && userId != null) {
             return orderSn;
         }
-        // 仅带 order_sn 的查询（订单详情页）：广播到所有分片，兼容历史按 user_id 路由插入的订单
+        // 仅带 order_sn 的查询（订单详情页）：广播到所有分片
         if (orderSn != null && userId == null) {
             return null;
         }
-        // 仅带 user_id 的查询（订单列表页）：用 user_id 精确路由
-        if (userId != null) {
-            return userId;
+        // 仅带 user_id 的查询（订单列表页）：必须广播，因插入时用 order_sn 分片，user_id 无法定位到同一分片
+        if (userId != null && orderSn == null) {
+            return null;
         }
         return null;
     }

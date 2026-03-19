@@ -4,6 +4,7 @@
  */
 package org.openzjl.index12306.biz.orderservice.mq.event;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -68,8 +69,9 @@ public class PayResultCallbackOrderEvent {
     private BigDecimal totalAmount;
 
     /**
-     * 支付时间
+     * 支付时间（兼容 MQ 消息中的 yyyy-MM-dd HH:mm:ss.SSS 格式）
      */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss.SSS", timezone = "Asia/Shanghai")
     private Date gmtPayment;
 
     /**

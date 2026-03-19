@@ -30,6 +30,15 @@ public interface OrderService {
     TicketOrderDetailRespDTO queryTicketByOrderSn(String orderSn);
 
     /**
+     * 根据订单号查询车票订单（支持传入 userId 兜底，网关未传 header 时使用）
+     *
+     * @param orderSn 订单号
+     * @param userId  用户ID，可为空；为空时从 UserContext 获取
+     * @return        车票订单
+     */
+    TicketOrderDetailRespDTO queryTicketByOrderSn(String orderSn, String userId);
+
+    /**
      * 根据用户名分页查询车票订单
      *
      * @param requestParam 根据用户id分页查询对象

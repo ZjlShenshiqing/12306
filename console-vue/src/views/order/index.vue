@@ -87,7 +87,8 @@
               @click="
                 () => {
                   fetchOrderCancel({ orderSn: currentOrderSn }).then((res) => {
-                    if (res.success) {
+                    const ok = res?.success === true || res?.code === '0'
+                    if (ok) {
                       message.success('订单取消成功')
                       router.push('/ticketSearch')
                     } else {
@@ -341,8 +342,14 @@ onUnmounted(() => {
 })
 
 const getOrder = () => {
-  fetchOrderBySn({ orderSn: currentOrderSn }).then((res) => {
-    if (res.success && res.data) {
+  if (!currentOrderSn) {
+    message.error('缺少订单号，请从购票流程或订单列表进入')
+    return
+  }
+  const uid = Cookie.get('userId')
+  fetchOrderBySn({ orderSn: currentOrderSn, sn: currentOrderSn, userId: uid }).then((res) => {
+    const ok = res?.success === true || res?.code === '0'
+    if (ok && res?.data) {
       state.currentInfo = res.data
     } else {
       fallbackGetOrder()
@@ -401,7 +408,8 @@ const totalAmount = computed(() => {
 const loadBalance = () => {
   fetchBalanceInfo()
     .then((res) => {
-      if (res?.success) {
+      const ok = res?.success === true || res?.code === '0'
+      if (ok) {
         state.balance = Number(res?.data?.balance ?? 0)
       }
     })
@@ -417,7 +425,8 @@ const rechargeBalance = () => {
   }
   state.rechargeLoading = true
   fetchBalanceRecharge({ amount }).then((res) => {
-    if (res?.success) {
+    const ok = res?.success === true || res?.code === '0'
+    if (ok) {
       state.balance = Number(res?.data?.balance ?? state.balance)
       state.rechargeOpen = false
       state.rechargeAmount = null
@@ -453,8 +462,9 @@ const handlePay = (channel) => {
     subject: `${state.currentInfo.departure}-${state.currentInfo.arrival}`
   }
   fetchPay(body).then((res) => {
+    const ok = res?.success === true || res?.code === '0'
     if (channel === 1) {
-      if (!res?.success) {
+      if (!ok) {
         state.isPayingOpen = false
         state.isInitiatePayment = false
         return message.error(res?.message || '余额支付失败')
@@ -465,7 +475,7 @@ const handlePay = (channel) => {
       return
     }
     const payBody = res?.data?.body
-    if (!res?.success || !payBody) {
+    if (!ok || !payBody) {
       state.isPayingOpen = false
       state.isInitiatePayment = false
       message.error(res?.message || '未获取到支付宝支付表单，请检查支付服务日志')

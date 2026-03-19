@@ -423,7 +423,8 @@ const handlePage = (page, pagesize) => {
 }
 const cancel = (sn) => {
   fetchOrderCancel({ orderSn: sn }).then((res) => {
-    if (res.success) {
+    const ok = res?.success === true || res?.code === '0'
+    if (ok) {
       message.success('订单取消成功')
       getTicketList(state.current, state.size, state.activeKey)
     } else {
@@ -436,29 +437,44 @@ const pay = (sn) => {
   router.push(`/order?sn=${sn}`)
 }
 const getTicketList = (current, size, statusType) => {
+  const uid = Cookie.get('userId')
+  if (!uid) {
+    message.warning('请先登录')
+    state.loading = false
+    return
+  }
   fetchTicketList({
-    userId,
+    userId: uid,
     current,
     size,
     statusType
   })
     .then((res) => {
       let dataSource = []
-      res.data.records.map((info) => {
-        info.passengerDetails?.map((item, index) => {
-          dataSource.push({
-            ...info,
-            ...item,
-            rowSpan: index === 0 ? info.passengerDetails.length : 0
+      const records = res?.data?.records ?? []
+      records.forEach((info) => {
+        const details = info?.passengerDetails ?? []
+        if (details.length > 0) {
+          details.forEach((item, index) => {
+            dataSource.push({
+              ...info,
+              ...item,
+              rowSpan: index === 0 ? details.length : 0
+            })
           })
-        })
+        } else {
+          dataSource.push({ ...info, rowSpan: 1 })
+        }
       })
       state.dataSource = dataSource
-      state.data = res.data
+      state.data = res?.data ?? { records: [], total: 0 }
       state.loading = false
     })
     .catch((err) => {
-      console.log(err)
+      console.error('订单列表加载失败', err)
+      message.error('订单加载失败，请检查网络或重新登录')
+      state.dataSource = []
+      state.data = { records: [], total: 0 }
       state.loading = false
     })
 }

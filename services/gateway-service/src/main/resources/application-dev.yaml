@@ -76,3 +76,5 @@ spring:
                   - /api/order-service/order/ticket/query
                   - /api/order-service/order/ticket/page
                   - /api/order-service/order/ticket/self/page
+                  # 订单详情接口需校验 Token 并传递 userId，否则分片查询失败
+                  - /api/order-service/order/item/

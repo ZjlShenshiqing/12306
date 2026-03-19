@@ -18,7 +18,8 @@ initAxios.interceptors.request.use(
   (config) => {
     const token = Cookie.get('token')
     if (token) {
-      config.headers.Authorization = token
+      // 网关 JWT 解析需要 Bearer 前缀，若 Cookie 中未带则自动补全
+      config.headers.Authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`
     }
     return config
   },

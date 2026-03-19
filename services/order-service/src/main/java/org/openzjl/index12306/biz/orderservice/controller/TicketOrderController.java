@@ -38,8 +38,12 @@ public class TicketOrderController {
      * @return 车票订单
      */
     @GetMapping("/api/order-service/order/item/ticket/query")
-    public Result<TicketOrderDetailRespDTO> queryTicketOrderByOrderSn(@RequestParam(value = "orderSn")  String orderSn) {
-        return Results.success(orderService.queryTicketByOrderSn(orderSn));
+    public Result<TicketOrderDetailRespDTO> queryTicketOrderByOrderSn(
+            @RequestParam(value = "orderSn", required = false) String orderSn,
+            @RequestParam(value = "sn", required = false) String sn,
+            @RequestParam(value = "userId", required = false) String userId) {
+        String snParam = orderSn != null && !orderSn.isBlank() ? orderSn : sn;
+        return Results.success(orderService.queryTicketByOrderSn(snParam, userId));
     }
 
     /**

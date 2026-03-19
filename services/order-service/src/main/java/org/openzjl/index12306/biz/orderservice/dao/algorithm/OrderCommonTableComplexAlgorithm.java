@@ -86,8 +86,9 @@ public class OrderCommonTableComplexAlgorithm implements ComplexKeysShardingAlgo
         if (orderSn != null && userId == null) {
             return null;
         }
-        if (userId != null) {
-            return userId;
+        // 仅 user_id（订单列表）：广播到所有表，因插入时用 order_sn 分片
+        if (userId != null && orderSn == null) {
+            return null;
         }
         return null;
     }
