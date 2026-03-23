@@ -36,6 +36,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -143,16 +144,28 @@ public class UserLoginServiceImpl implements UserLoginService {
         // 如果查询不到（可能是直接使用用户名登录），使用原始输入作为用户名
         username = Optional.ofNullable(username).orElse(usernameOrEmailOrPhone);
         
-        // 用户验证（用户名 + 密码） =
-        // 使用用户名和密码查询用户表，验证账号和密码是否正确
+        // 用户验证（用户名 + 密码）
         LambdaQueryWrapper<UserDO> queryWrapper = Wrappers.lambdaQuery(UserDO.class)
-                .eq(UserDO::getUsername, username)                    // 用户名匹配
-                .eq(UserDO::getPassword, requestParam.getPassword()) // 密码匹配
-                .select(UserDO::getId, UserDO::getUsername, UserDO::getRealName);  // 只查询需要的字段，提高性能
-        
-        // 执行查询，如果用户名和密码都正确，返回用户信息
+                .eq(UserDO::getUsername, username)
+                .eq(UserDO::getPassword, requestParam.getPassword())
+                .select(UserDO::getId, UserDO::getUsername, UserDO::getRealName);
+
         UserDO userDO = userMapper.selectOne(queryWrapper);
-        
+
+        // 兜底：按用户名分片查不到时（邮箱/手机解析失败或分片路由不一致），按密码广播查询
+        if (userDO == null) {
+            final String finalUsername = username;
+            LambdaQueryWrapper<UserDO> fallbackWrapper = Wrappers.lambdaQuery(UserDO.class)
+                    .eq(UserDO::getPassword, requestParam.getPassword())
+                    .select(UserDO::getId, UserDO::getUsername, UserDO::getRealName);
+            List<UserDO> candidates = userMapper.selectList(fallbackWrapper);
+            // 先按用户名精确匹配；若无匹配且仅一人命中，则视为该用户（邮箱/手机解析失败场景）
+            userDO = candidates.stream()
+                    .filter(u -> finalUsername.equals(u.getUsername()))
+                    .findFirst()
+                    .orElse(candidates.size() == 1 ? candidates.get(0) : null);
+        }
+
         // 验证成功，生成 Token 并缓存
         if (userDO != null) {
             // 构建用户信息DTO（用于生成 Token 和返回给前端）

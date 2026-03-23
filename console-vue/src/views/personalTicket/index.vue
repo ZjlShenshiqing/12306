@@ -127,8 +127,9 @@ const handleFetchMyTicket = (current, size) => {
   state.loading = true
   fetchMyTicket({ current, size })
     .then((res) => {
-      state.data = res.data?.records
-      state.total = res.data?.total
+      const ok = res?.success === true || res?.code === '0'
+      state.data = ok ? (res.data?.records ?? []) : []
+      state.total = ok ? (res.data?.total ?? 0) : 0
       state.loading = false
     })
     .catch(() => (state.loading = false))
