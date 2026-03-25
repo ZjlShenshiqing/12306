@@ -2,11 +2,13 @@
   <Header :class="{ isLogin }">
     <div class="header-wrapper">
       <div>
-        <div class="logo">拿个offer-12306铁路购票@马丁</div>
+        <router-link to="/" class="logo-link">
+          <div class="logo">12306购票</div>
+        </router-link>
       </div>
       <div>
         <ul class="nav-list-wrapper">
-          <router-link to="/ticketSearch">
+          <router-link to="/">
             <li>首页</li>
           </router-link>
           <a href="https://nageoffer.com/12306" target="_blank">
@@ -18,7 +20,7 @@
           <a href="https://nageoffer.com/planet" target="_blank">
             <li>社区</li>
           </a>
-          <a v-if="route.fullPath !== '/login'">
+          <a v-if="route.path !== '/login' && route.path !== '/'">
             <Dropdown :trigger="['click']">
               <li :style="{ padding: '0 0 0 30px' }">
                 <Avatar shape="square" style="background-color: #1890ff"
@@ -106,7 +108,10 @@ const logout = () => {
 }
 
 .isLogin.ant-layout-header {
-  background-color: transparent;
+  background-color: rgba(37, 43, 48, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.35);
 }
 
 .header-wrapper {
@@ -116,6 +121,12 @@ const logout = () => {
   justify-content: space-between;
   flex-wrap: nowrap;
   color: rgba(255, 255, 255, 0.8);
+}
+
+.logo-link {
+  text-decoration: none;
+  color: inherit;
+  display: inline-block;
 }
 
 .logo {

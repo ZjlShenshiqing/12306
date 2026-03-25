@@ -18,6 +18,9 @@
             <IconFont type="icon-icon_yingyongguanli" />
           </template>
           <template #title>车票管理 </template>
+          <Item key="home"
+            ><RouterLink to="/">首页</RouterLink></Item
+          >
           <Item key="ticketSearch"
             ><RouterLink to="/ticketSearch">车票查询</RouterLink></Item
           >

@@ -1,7 +1,7 @@
 <script setup>
 import { Layout, ConfigProvider, Space } from 'ant-design-vue'
 import { useRoute } from 'vue-router'
-import { ref, watch, onMounted, reactive } from 'vue'
+import { computed, onMounted, reactive } from 'vue'
 import BreadHeader from '@/components/bread-header'
 import zhCN from 'ant-design-vue/es/locale/zh_CN'
 import Header from './components/header'
@@ -15,8 +15,14 @@ dayjs.extend(duration)
 const state = reactive()
 
 const { Content } = Layout
-const isLogin = ref(false)
 const route = useRoute()
+
+/** 登录页 / 首页：不显示侧栏、面包屑 */
+const hideAppChrome = computed(
+  () => route.path === '/login' || route.path === '/'
+)
+/** 仅登录页：顶栏使用浅色玻璃样式 */
+const isLoginPage = computed(() => route.path === '/login')
 
 onMounted(() => {
   const token = jsCookie.get('token')
@@ -27,34 +33,16 @@ onMounted(() => {
     console.log(location.pathname, 'change')
   })
 })
-
-// watch(
-//   () => location.pathname,
-//   (newValue) => {
-//     console.log('newValue:::', newValue)
-//   }
-// )
-
-watch(
-  () => route.path,
-  (newRoute) => {
-    if (newRoute === '/login') {
-      isLogin.value = true
-    } else {
-      isLogin.value = false
-    }
-  }
-)
 </script>
 <template>
   <ConfigProvider :locale="zhCN">
     <Layout>
-      <Header :isLogin="isLogin" />
-      <Layout class="page-wrapper" :class="{ isLogin }">
-        <Sider v-if="!isLogin" />
-        <Content class="app-wrapper" :class="{ isLogin }">
+      <Header :isLogin="isLoginPage" />
+      <Layout class="page-wrapper" :class="{ isLogin: hideAppChrome }">
+        <Sider v-if="!hideAppChrome" />
+        <Content class="app-wrapper" :class="{ isLogin: hideAppChrome }">
           <ConfigProvider :locale="zhCN">
-            <BreadHeader v-if="!isLogin" /> <router-view /> </ConfigProvider
+            <BreadHeader v-if="!hideAppChrome" /> <router-view /> </ConfigProvider
         ></Content>
       </Layout>
     </Layout>
@@ -74,13 +62,15 @@ watch(
 }
 
 .isLogin.page-wrapper {
-  padding: 0;
+  padding: 64px 0 0;
+  margin: 0;
 }
 .ant-layout-content {
   min-height: calc(100vh - 64px);
 }
 .isLogin.ant-layout-content {
-  height: 100vh;
+  min-height: calc(100vh - 64px);
+  height: auto;
   margin: 0;
 }
 ::v-deep {

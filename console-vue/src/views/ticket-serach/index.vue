@@ -29,7 +29,9 @@ import {
   fetchTrainStation
 } from '@/service/index'
 import { SEAT_CLASS_TYPE_LIST, TRAIN_BRAND_LIST, TRAIN_TAG } from '@/constants'
+import { useRoute } from 'vue-router'
 
+const route = useRoute()
 const useForm = Form.useForm
 
 const carRangeTime = [
@@ -500,10 +502,15 @@ const handlePriceShow = (price) => {
 }
 
 onMounted(() => {
+  const q = route.query
+  if (q.fromStation) headSearch.fromStation = q.fromStation
+  if (q.toStation) headSearch.toStation = q.toStation
+  if (q.departureDate) headSearch.departureDate = dayjs(String(q.departureDate))
+
   fetchTicketSearch({
     fromStation: headSearch.fromStation,
     toStation: headSearch.toStation,
-    departureDate: dayjs(new Date()).format('YYYY-MM-DD')
+    departureDate: headSearch.departureDate.format('YYYY-MM-DD')
   }).then((res) => {
     if (!res.success) return message.error(res.message)
     const list = res.data?.ticketList ?? res.data?.trainList ?? []

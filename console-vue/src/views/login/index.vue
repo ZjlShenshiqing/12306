@@ -9,11 +9,12 @@ import {
   Select,
   Modal
 } from 'ant-design-vue'
-import { reactive, ref, unref } from 'vue'
+import { reactive, ref } from 'vue'
 import { fetchLogin, fetchRegister } from '../../service'
 import { UserOutlined, LockOutlined } from '@ant-design/icons-vue'
 import { useRouter } from 'vue-router'
 import Cookies from 'js-cookie'
+
 const useForm = Form.useForm
 
 const formState = reactive({
@@ -28,17 +29,9 @@ const state = reactive({
 
 const rulesRef = reactive({
   usernameOrMailOrPhone: [
-    {
-      required: true,
-      message: '请输入用户名或者邮件或者手机号'
-    }
+    { required: true, message: '请输入用户名、邮箱或手机号' }
   ],
-  password: [
-    {
-      required: true,
-      message: '请输入密码'
-    }
-  ]
+  password: [{ required: true, message: '请输入密码' }]
 })
 
 const { validate, validateInfos } = useForm(formState, rulesRef)
@@ -54,55 +47,19 @@ const registerForm = reactive({
 })
 
 const registerRules = reactive({
-  username: [
-    {
-      required: true,
-      message: '请输入用户名'
-    }
-  ],
-  password: [
-    {
-      required: true,
-      message: '请输入密码'
-    }
-  ],
-  realName: [
-    {
-      required: true,
-      message: '请输入姓名'
-    }
-  ],
-  idType: [
-    {
-      required: true,
-      message: '请选择证件类型'
-    }
-  ],
-  idCard: [
-    {
-      required: true,
-      message: '请输入证件号码'
-    }
-  ],
-  phone: [
-    {
-      required: true,
-      message: '请输入电话号码'
-    }
-  ],
-  mail: [
-    {
-      required: true,
-      message: '请输入邮箱'
-    }
-  ]
+  username: [{ required: true, message: '请输入用户名' }],
+  password: [{ required: true, message: '请输入密码' }],
+  realName: [{ required: true, message: '请输入姓名' }],
+  idType: [{ required: true, message: '请选择证件类型' }],
+  idCard: [{ required: true, message: '请输入证件号码' }],
+  phone: [{ required: true, message: '请输入电话号码' }],
+  mail: [{ required: true, message: '请输入邮箱' }]
 })
 
 const { validate: registerValidate, validateInfos: registerValidateInfos } =
   useForm(registerForm, registerRules)
 
-let currentAction = ref('login')
-
+const currentAction = ref('login')
 const router = useRouter()
 
 const handleFinish = () => {
@@ -115,9 +72,7 @@ const handleFinish = () => {
     return
   }
   validate().then(() => {
-    fetchLogin({
-      ...formState
-    }).then((res) => {
+    fetchLogin({ ...formState }).then((res) => {
       if (res.success) {
         Cookies.set('token', res.data?.accessToken)
         Cookies.set('username', res.data?.username)
@@ -139,9 +94,9 @@ const handleLogin = () => {
         password: formState.code
       }).then((res) => {
         if (res.success) {
-        Cookies.set('token', res.data?.accessToken)
-        Cookies.set('userId', res.data?.userId ?? res.data?.id ?? '')
-        Cookies.set('username', res.data?.username)
+          Cookies.set('token', res.data?.accessToken)
+          Cookies.set('userId', res.data?.userId ?? res.data?.id ?? '')
+          Cookies.set('username', res.data?.username)
           router.push('/ticketSearch')
         } else {
           message.error(res.message)
@@ -173,134 +128,138 @@ const registerSubmit = () => {
     .catch((err) => console.log(err))
 }
 </script>
+
 <template>
-  <div class="login-wrapper">
-    <div class="title-wrapper">
-      <!-- <h1 class="title">铁路12306</h1>
-      <h3 class="desc">其他文案</h3> -->
-    </div>
-    <div class="login-reg-panel">
-      <div class="login-info-box">
-        <h2>已有账号？</h2>
-        <h3>欢迎登录账号！</h3>
-        <button @click="() => (currentAction = 'login')">去登录</button>
-      </div>
-      <div class="register-info-box">
-        <h2>没有账号？</h2>
-        <h3>欢迎注册账号！</h3>
-        <button @click="() => (currentAction = 'register')">去注册</button>
-      </div>
-      <div
-        class="white-panel"
-        :class="{ 'white-panel-left': currentAction === 'register' }"
-      >
-        <div class="login-show" v-if="currentAction === 'login'">
-          <h1 class="title">登录</h1>
-          <Form name="basic" autocomplete="off">
-            <FormItem v-bind="validateInfos.usernameOrMailOrPhone">
-              <Input
-                size="large"
-                v-model:value="formState.usernameOrMailOrPhone"
-                placeholder="用户名"
-              >
-                <template #prefix
-                  ><UserOutlined style="color: rgba(0, 0, 0, 0.25)" /></template
-              ></Input>
-            </FormItem>
+  <div class="auth-shell">
+    <div class="auth-shell__aurora" aria-hidden="true" />
+    <div class="auth-shell__dots" aria-hidden="true" />
+    <div class="auth-shell__vignette" aria-hidden="true" />
 
-            <FormItem v-bind="validateInfos.password">
-              <InputPassword
-                size="large"
-                v-model:value="formState.password"
-                placeholder="密码"
-              >
-                <template #prefix
-                  ><LockOutlined style="color: rgba(0, 0, 0, 0.25)"
-                /></template>
-              </InputPassword>
-            </FormItem>
-            <FormItem>
-              <div class="action-btn">
-                <a href="">忘记密码？</a>
-                <Button
-                  type="primary"
-                  :style="{ backgroundColor: '#202020', border: 'none' }"
-                  @click="handleFinish"
-                  >登录</Button
-                >
-              </div>
-            </FormItem>
-          </Form>
+    <div
+      class="auth-card"
+      :class="{ 'auth-card--register': currentAction === 'register' }"
+    >
+      <div v-if="currentAction === 'login'" class="auth-card__body">
+        <div class="auth-card__brand" aria-hidden="true">
+          <span class="auth-card__brand-icon">🚄</span>
         </div>
-        <div class="register-show" v-else>
-          <h1 class="title">注册</h1>
-          <Form name="basic" autocomplete="off" :label-col="{ span: 6 }">
-            <FormItem label="用户名" v-bind="registerValidateInfos.username">
-              <Input
-                v-model:value="registerForm.username"
-                placeholder="请输入用户名"
-              >
-              </Input>
-            </FormItem>
-            <FormItem label="密码" v-bind="registerValidateInfos.password">
-              <InputPassword
-                v-model:value="registerForm.password"
-                placeholder="密码"
-              >
-              </InputPassword>
-            </FormItem>
+        <header class="auth-card__head">
+          <h1 class="auth-card__title">欢迎登录</h1>
+          <p class="auth-card__sub">铁路购票 · 使用用户名、邮箱或手机号</p>
+        </header>
+        <Form name="login" autocomplete="off" class="auth-card__form">
+          <FormItem v-bind="validateInfos.usernameOrMailOrPhone" class="form-gap">
+            <Input
+              size="large"
+              v-model:value="formState.usernameOrMailOrPhone"
+              placeholder="请输入账号"
+              class="rounded-input"
+            >
+              <template #prefix>
+                <UserOutlined class="input-ico" />
+              </template>
+            </Input>
+          </FormItem>
+          <FormItem v-bind="validateInfos.password" class="form-gap">
+            <InputPassword
+              size="large"
+              v-model:value="formState.password"
+              placeholder="请输入密码"
+              class="rounded-input"
+            >
+              <template #prefix>
+                <LockOutlined class="input-ico" />
+              </template>
+            </InputPassword>
+          </FormItem>
+          <div class="row-actions">
+            <a href="javascript:;" class="link-muted">忘记密码？</a>
+          </div>
+          <Button
+            type="primary"
+            block
+            class="btn-submit"
+            size="large"
+            @click="handleFinish"
+          >
+            登 录
+          </Button>
+        </Form>
+        <footer class="auth-card__foot">
+          <span class="auth-card__foot-text">没有账号？</span>
+          <button
+            type="button"
+            class="auth-card__link"
+            @click="currentAction = 'register'"
+          >
+            立即注册
+          </button>
+        </footer>
+      </div>
 
-            <FormItem label="姓名" v-bind="registerValidateInfos.realName">
-              <Input
-                v-model:value="registerForm.realName"
-                placeholder="请输入姓名"
-              >
-              </Input>
-            </FormItem>
-            <FormItem label="证件类型" v-bind="registerValidateInfos.idType">
-              <Select
-                :options="[{ value: 0, label: '中国居民身份证' }]"
-                v-model:value="registerForm.idType"
-                placeholder="请选择证件类型"
-              ></Select>
-            </FormItem>
-            <FormItem label="证件号码" v-bind="registerValidateInfos.idCard">
-              <Input
-                v-model:value="registerForm.idCard"
-                placeholder="请输入证件号码"
-              >
-              </Input>
-            </FormItem>
-            <FormItem label="手机号码" v-bind="registerValidateInfos.phone">
-              <Input
-                v-model:value="registerForm.phone"
-                placeholder="请输入手机号码"
-              >
-              </Input>
-            </FormItem>
-            <FormItem label="邮件" v-bind="registerValidateInfos.mail">
-              <Input
-                v-model:value="registerForm.mail"
-                placeholder="请输入邮箱账号"
-              >
-              </Input>
-            </FormItem>
-            <FormItem>
-              <div class="action-btn">
-                <a></a>
-                <Button
-                  type="primary"
-                  @click="registerSubmit"
-                  :style="{ backgroundColor: '#202020', border: 'none' }"
-                  >注册</Button
-                >
-              </div>
-            </FormItem>
-          </Form>
+      <div v-else class="auth-card__body auth-card__body--scroll">
+        <div class="auth-card__brand" aria-hidden="true">
+          <span class="auth-card__brand-icon">🚄</span>
         </div>
+        <header class="auth-card__head">
+          <h1 class="auth-card__title">注册账号</h1>
+          <p class="auth-card__sub">请如实填写信息，方便购票与核验</p>
+        </header>
+        <Form
+          name="register"
+          autocomplete="off"
+          :label-col="{ span: 7 }"
+          :wrapper-col="{ span: 17 }"
+          class="auth-card__form register-form"
+        >
+          <FormItem label="用户名" v-bind="registerValidateInfos.username">
+            <Input v-model:value="registerForm.username" placeholder="用户名" />
+          </FormItem>
+          <FormItem label="密码" v-bind="registerValidateInfos.password">
+            <InputPassword
+              v-model:value="registerForm.password"
+              placeholder="密码"
+            />
+          </FormItem>
+          <FormItem label="姓名" v-bind="registerValidateInfos.realName">
+            <Input v-model:value="registerForm.realName" placeholder="真实姓名" />
+          </FormItem>
+          <FormItem label="证件类型" v-bind="registerValidateInfos.idType">
+            <Select
+              :options="[{ value: 0, label: '中国居民身份证' }]"
+              v-model:value="registerForm.idType"
+              placeholder="请选择"
+            />
+          </FormItem>
+          <FormItem label="证件号码" v-bind="registerValidateInfos.idCard">
+            <Input v-model:value="registerForm.idCard" placeholder="证件号码" />
+          </FormItem>
+          <FormItem label="手机号码" v-bind="registerValidateInfos.phone">
+            <Input v-model:value="registerForm.phone" placeholder="手机号" />
+          </FormItem>
+          <FormItem label="邮箱" v-bind="registerValidateInfos.mail">
+            <Input v-model:value="registerForm.mail" placeholder="邮箱" />
+          </FormItem>
+          <FormItem :wrapper-col="{ span: 24 }" class="reg-submit-wrap">
+            <Button type="primary" block class="btn-submit" size="large" @click="registerSubmit">
+              完成注册
+            </Button>
+          </FormItem>
+        </Form>
+        <footer class="auth-card__foot">
+          <span class="auth-card__foot-text">已有账号？</span>
+          <button
+            type="button"
+            class="auth-card__link"
+            @click="currentAction = 'login'"
+          >
+            返回登录
+          </button>
+        </footer>
       </div>
     </div>
   </div>
+
   <Modal
     :visible="state.open"
     title="人机认证"
@@ -312,9 +271,7 @@ const registerSubmit = () => {
   >
     <div class="wrapper">
       <h1 class="tip-text">
-        {{
-          `扫码下方二维码，关注后回复：12306，获取拿个offer-12306在线购票系统人机验证码`
-        }}
+        扫码下方二维码，关注后回复「12306」获取人机验证码，用于在线购票系统验证
       </h1>
       <img
         src="https://images-machen.oss-cn-beijing.aliyuncs.com/1_990064918_171_86_3_722467528_78457b21279219802d38525d32a77f39.png"
@@ -322,173 +279,280 @@ const registerSubmit = () => {
       />
       <div class="code-input">
         <label class="code-label">验证码</label>
-        <Input
-          v-model:value="formState.code"
-          :style="{ width: '300px' }"
-        ></Input>
+        <Input v-model:value="formState.code" :style="{ width: '300px' }" />
       </div>
     </div>
   </Modal>
 </template>
 
 <style lang="scss" scoped>
-.login-wrapper {
+/* 清爽浅色 + 轻微动态背景，与顶栏协调 */
+.auth-shell {
+  position: relative;
+  isolation: isolate;
+  min-height: calc(100vh - 64px);
   width: 100%;
-  height: 100%;
-  // background-color: #fff;
-  background: url('../../assets/black_dot.png');
-  background-clip: border-box;
-  .login-reg-panel {
-    position: relative;
-    top: 50%;
-    transform: translateY(-50%);
-    text-align: center;
-    width: 40%;
-    right: 0;
-    left: 20%;
-    margin: auto;
-    min-width: 800px;
-    height: 600px;
-    background-color: rgba(30, 30, 30, 0.9);
-    .white-panel {
-      background-color: rgba(255, 255, 255, 1);
-      height: 600px;
-      position: absolute;
-      width: 50%;
-      right: calc(50% - 50px);
-      transition: 0.3s ease-in-out;
-      z-index: 0;
-      box-sizing: border-box;
-      .login-show,
-      .register-show {
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        // justify-content: space-around;
-        transition: 0.3s ease-in-out;
-        color: #242424;
-        text-align: left;
-        padding: 30px;
-        .title {
-          font-size: 24px;
-          font-weight: bolder;
-          padding: 20px 0;
-          color: #202020;
-        }
-        .action-btn {
-          display: flex;
-          width: 100%;
-          a {
-            display: block;
-            line-height: 32px;
-          }
-          justify-content: space-between;
-        }
-      }
-    }
-    .white-panel-left {
-      transition: 0.3s ease-in-out;
-      right: calc(0px + 50px);
-    }
-    .login-info-box {
-      display: flex;
-      flex-direction: column;
-      width: 30%;
-      padding: 0 50px;
-      top: 20%;
-      left: 0;
-      position: absolute;
-      text-align: left;
-      justify-content: center;
-      font-family: 'Mukta', sans-serif;
-      color: #b8b8b8;
-      h2 {
-        font-size: 24px;
-        color: #b8b8b8;
-        font-weight: bolder;
-        font-weight: bolder;
-        margin-bottom: 40px;
-      }
-      h3 {
-        font-size: 20px;
-        color: #b8b8b8;
-        margin-bottom: 40px;
-      }
-      button {
-        cursor: pointer;
-        width: 100%;
-        background-color: transparent;
-        box-shadow: none;
-        border: 1px solid #b8b8b8;
-        border-radius: 2px;
-        height: 25px;
-      }
-    }
-    .register-info-box {
-      width: 30%;
-      padding: 0 50px;
-      top: 20%;
-      right: 0;
-      position: absolute;
-      text-align: left;
-      font-family: 'Mukta', sans-serif;
-      color: #b8b8b8;
-      h2 {
-        font-size: 24px;
-        color: #b8b8b8;
-        font-weight: bolder;
-        font-weight: bolder;
-        margin-bottom: 40px;
-      }
-      h3 {
-        font-size: 20px;
-        color: #b8b8b8;
-        margin-bottom: 40px;
-      }
-      button {
-        cursor: pointer;
-        width: 100%;
-        background-color: transparent;
-        box-shadow: none;
-        border: 1px solid #b8b8b8;
-        border-radius: 2px;
-        height: 25px;
-      }
-    }
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px 48px;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
+  font-family:
+    'PingFang SC',
+    'Microsoft YaHei',
+    -apple-system,
+    sans-serif;
+}
+
+.auth-shell__aurora {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(
+    125deg,
+    #e8f0fe 0%,
+    #f0f5ff 35%,
+    #eef2ff 70%,
+    #e0e7ff 100%
+  );
+  background-size: 200% 200%;
+  animation: bg-pan 20s ease-in-out infinite;
+}
+
+@keyframes bg-pan {
+  0%,
+  100% {
+    background-position: 0% 40%;
+  }
+  50% {
+    background-position: 100% 60%;
   }
 }
-.code-modal {
-  .wrapper {
-    text-align: center;
-    .tip-text {
-      width: 100%;
-      text-align: center;
-      font-size: 14px;
-      color: red;
-    }
-    .code-input {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      .code-label {
-        margin: 10px;
-        &::before {
-          content: '*';
-          color: red;
-        }
-      }
-    }
-  }
+
+.auth-shell__dots {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.4;
+  background-image: radial-gradient(rgba(37, 99, 235, 0.12) 1px, transparent 1px);
+  background-size: 20px 20px;
+  pointer-events: none;
 }
-::v-deep {
-  .ant-modal-header {
-    background-color: #3b3b3b !important;
-  }
-  .ant-form-item-label {
-    label {
-      color: #202020;
-    }
-  }
+
+.auth-shell__vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 85% 65% at 50% 40%,
+    transparent 0%,
+    rgba(248, 250, 252, 0.85) 100%
+  );
+}
+
+.auth-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 20px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow:
+    0 4px 6px -1px rgba(15, 23, 42, 0.06),
+    0 24px 48px -12px rgba(15, 23, 42, 0.12);
+}
+
+.auth-card--register {
+  max-width: 520px;
+}
+
+.auth-card__brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.auth-card__brand-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  font-size: 28px;
+  line-height: 1;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #eff6ff 0%, #dbeafe 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 4px 12px rgba(37, 99, 235, 0.12);
+}
+
+.auth-card__body {
+  padding: 36px 36px 28px;
+  box-sizing: border-box;
+}
+
+.auth-card__body--scroll {
+  max-height: min(720px, calc(100vh - 64px - 100px));
+  overflow-y: auto;
+  padding-bottom: 20px;
+}
+
+.auth-card__head {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.auth-card__title {
+  margin: 0 0 8px;
+  font-size: 24px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: 0.02em;
+}
+
+.auth-card__sub {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #64748b;
+}
+
+.form-gap {
+  margin-bottom: 18px;
+}
+
+.input-ico {
+  color: #94a3b8;
+  font-size: 16px;
+}
+
+.row-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.link-muted {
+  color: #2563eb;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.link-muted:hover {
+  color: #1d4ed8;
+}
+
+.btn-submit {
+  height: 46px !important;
+  font-weight: 600 !important;
+  font-size: 16px !important;
+  border-radius: 12px !important;
+  border: none !important;
+  background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%) !important;
+  box-shadow: 0 8px 20px -6px rgba(37, 99, 235, 0.45) !important;
+}
+
+.btn-submit:hover {
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
+  color: #fff !important;
+}
+
+.auth-card__foot {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #f1f5f9;
+  text-align: center;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.auth-card__foot-text {
+  margin-right: 6px;
+}
+
+.auth-card__link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #2563eb;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.auth-card__link:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.register-form {
+  padding-right: 4px;
+}
+
+.reg-submit-wrap {
+  margin-bottom: 0 !important;
+  margin-top: 12px;
+}
+
+.code-modal .wrapper {
+  text-align: center;
+}
+.code-modal .tip-text {
+  font-size: 14px;
+  color: #cf1322;
+  line-height: 1.6;
+}
+.code-modal .code-input {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 12px;
+}
+.code-modal .code-label {
+  margin-right: 10px;
+}
+.code-modal .code-label::before {
+  content: '*';
+  color: #cf1322;
+}
+
+:deep(.rounded-input.ant-input),
+:deep(.rounded-input.ant-input-affix-wrapper) {
+  border-radius: 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #f8fafc !important;
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    background 0.2s;
+}
+
+:deep(.rounded-input.ant-input-affix-wrapper-focused),
+:deep(.rounded-input.ant-input:focus) {
+  border-color: #93c5fd !important;
+  background: #fff !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
+}
+
+:deep(.register-form .ant-form-item-label > label) {
+  color: #475569;
+}
+
+:deep(.register-form .ant-input),
+:deep(.register-form .ant-input-password .ant-input) {
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+:deep(.register-form .ant-input:focus),
+:deep(.register-form .ant-input-password-focused .ant-input) {
+  background: #fff;
 }
 </style>

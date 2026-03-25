@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { message } from 'ant-design-vue'
 import Login from '../views/login'
+import Home from '../views/home'
 import TicketSearch from '../views/ticket-serach'
 import Userinfo from '../views/user-info'
 import Passenger from '../views/passenger'
@@ -17,14 +18,11 @@ import Cookies from 'js-cookie'
 const routes = [
   {
     path: '/',
-    name: 'index',
-    meta: { requiresAuth: false },
-    redirect: (to) => {
-      // 该函数接收目标路由作为参数
-      // 相对位置不以`/`开头
-      // 或 { path: 'profile'}
-      return '/ticketSearch'
-    }
+    name: 'home',
+    label: '首页',
+    component: Home,
+    icon: 'icon-chaxun',
+    meta: { requiresAuth: false }
   },
   {
     path: '/login',
