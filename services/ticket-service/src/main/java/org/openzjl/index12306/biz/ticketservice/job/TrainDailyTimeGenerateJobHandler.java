@@ -55,7 +55,13 @@ public class TrainDailyTimeGenerateJobHandler extends IJobHandler {
     @GetMapping("/api/ticket-service/train-daily-time/job/execute")
     @Override
     public void execute() {
-        LocalDate targetDepartureDate = parseTargetDate(getJobRequestParam());
+        runRoll(parseTargetDate(getJobRequestParam()));
+    }
+
+    /**
+     * 将车次/区段时间滚到指定日期（启动器、HTTP、XXL-JOB 共用）。
+     */
+    public void runRoll(LocalDate targetDepartureDate) {
         List<TrainDO> trains = trainMapper.selectList(Wrappers.emptyWrapper());
         if (trains == null || trains.isEmpty()) {
             log.info("train-daily-time job skip: no train data");

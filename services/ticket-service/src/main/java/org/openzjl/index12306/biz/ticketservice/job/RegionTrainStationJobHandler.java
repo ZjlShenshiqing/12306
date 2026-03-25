@@ -36,8 +36,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.HashSet;
 import java.util.List;
@@ -99,7 +97,7 @@ public class RegionTrainStationJobHandler extends IJobHandler {
 
     private String getJobRequestParam() {
         return EnvironmentUtil.isDevEnvironment()
-                ? ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest().getHeader("requestParam")
+                ? JobRequestParamUtil.resolve()
                 : XxlJobHelper.getJobParam();
     }
 }
