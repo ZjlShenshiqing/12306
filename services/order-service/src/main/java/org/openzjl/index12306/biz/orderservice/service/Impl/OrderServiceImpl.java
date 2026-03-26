@@ -267,8 +267,8 @@ public class OrderServiceImpl implements OrderService {
         }
         TicketOrderPageQueryReqDTO pageReq = new TicketOrderPageQueryReqDTO();
         pageReq.setUserId(userId);
-        pageReq.setCurrent(1);
-        pageReq.setSize(500);
+        pageReq.setCurrent(1L);
+        pageReq.setSize(500L);
         List<TicketOrderDetailSelfRespDTO> allTickets = new ArrayList<>();
         for (int statusType = 1; statusType <= 2; statusType++) {
             pageReq.setStatusType(statusType);

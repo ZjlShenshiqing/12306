@@ -12,14 +12,14 @@
           <router-link to="/ticketSearch">
             <li class="nav-item">车票</li>
           </router-link>
-          <router-link to="/order-list">
+          <router-link to="/ticketList">
             <li class="nav-item">服务</li>
           </router-link>
         </ul>
       </div>
       
       <div class="header-right">
-        <a v-if="route.path !== '/login' && route.path !== '/'">
+        <a v-if="route.path !== '/login' && Cookie.get('token')">
           <Dropdown :trigger="['click']" placement="bottomRight">
             <div class="user-menu">
               <Avatar shape="circle" style="background-color: #1890ff; cursor: pointer;"
@@ -29,13 +29,13 @@
             <template #overlay>
               <Menu>
                 <MenuItem>
-                  <a @click="() => router.push('/user-info')">个人信息</a>
+                  <a @click="() => router.push('/userInfo')">个人信息</a>
                 </MenuItem>
                 <MenuItem>
                   <a @click="() => router.push('/passenger')">乘车人管理</a>
                 </MenuItem>
                 <MenuItem>
-                  <a @click="() => router.push('/order-list')">我的订单</a>
+                  <a @click="() => router.push('/ticketList')">我的订单</a>
                 </MenuItem>
                 <MenuItem>
                   <a @click="() => logout()">退出登录</a>
@@ -84,7 +84,7 @@ const route = useRoute()
 watch(
   () => route.fullPath,
   (newValue) => {
-    state.username = username
+    state.username = Cookie.get('username')
   },
   { immediate: true }
 )
